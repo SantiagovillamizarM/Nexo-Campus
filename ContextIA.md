@@ -330,45 +330,110 @@ Cualquier fallo (Ollama apagado, tiempo de espera, error del servidor, JSON inv�
 ```python
 from nexo_campus.ai.triaje import clasificar_incidencia
 
-triaje = clasificar_incidencia("El proyector del aula 204 no enciende")
+triaje = clasificar_incidencia("El proyector no enciende", espacio=aula, recurso=proyector, reserva_en_curso=clase)
 triaje.categoria          # "tecnologia"
-triaje.prioridad          # Prioridad.alta (Enum de models)
+triaje.prioridad          # Prioridad.critica (Enum de models)
 triaje.area_responsable   # "soporte_ti"
-triaje.justificacion      # frase corta en español
+triaje.justificacion      # una o dos frases en español
 ```
 
-- Las listas permitidas están en constantes al inicio del archivo. `AREA_POR_CATEGORIA` define a qué área se enruta cada categoría (`infraestructura → mantenimiento`, `tecnologia → soporte_ti`, `aseo → servicios_generales`, `seguridad → seguridad`, `bienestar → bienestar_estudiantil`). Para agregar o cambiar una categoría solo se edita ese diccionario.
+- Constantes al inicio del archivo (el jurado puede pedir cambiarlas):
+  - `CATEGORIAS = ["infraestructura", "tecnologia", "aseo", "seguridad", "bienestar", "otro"]`
+  - `AREAS = ["mantenimiento", "soporte_ti", "servicios_generales", "seguridad", "bienestar"]`
+  - `AREA_POR_CATEGORIA`: a qué área se enruta cada categoría. `otro` no está en el diccionario, así que puede ir a cualquier área.
+- **Contexto:** `espacio`, `recurso` y `reserva_en_curso` son opcionales. Si hay una clase en curso en el espacio, la IA lo sabe y sube la prioridad: un proyector que no enciende es `alta` en un aula vacía y `critica` con clase en curso.
 - La respuesta se rechaza (`IAError`) si la IA inventa una categoría, una prioridad o un área fuera de la lista, si deja vacía la justificación o si el área no corresponde a la categoría.
 - Si el texto está vacío o supera `MAX_CARACTERES_INCIDENCIA` (1000), lanza `NexoCampusError` sin llamar a la IA.
-- Las pruebas de la validación están en `tests/test_triaje.py` y no necesitan Ollama.
+
+### Servicio de incidencias (`nexo_campus/services/incidencias.py`)
+
+Dos pasos, para que la persona confirme o corrija lo que propone la IA:
+
+| Función | Qué hace |
+|---|---|
+| `analizar_incidencia(descripcion, espacio_id=None, recurso_id=None) -> Triaje` | Valida el texto y que el espacio o el equipo existan, busca si hay clase en curso y llama a la IA. **No guarda nada.** Si la IA falla, deja pasar el `IAError` |
+| `origen_segun_propuesta(propuesta, categoria, prioridad, area) -> OrigenClasificacion` | Ayuda para la UI: `ia` si la persona aceptó la propuesta tal cual, `manual` si cambió algo o si no hubo propuesta (la IA falló) |
+| `registrar_incidencia(descripcion, reportante, espacio_id, recurso_id, categoria, prioridad, area_responsable, justificacion, origen) -> Incidencia` | Valida que los valores estén en las listas y guarda la incidencia abierta. `origen` solo puede ser `ia` o `manual` |
+| `cerrar_incidencia(incidencia_id) -> Incidencia` | Cierra la incidencia. Rechaza las que no existen o ya están cerradas |
+
+Flujo esperado en la UI (P4):
+
+```python
+try:
+    with st.spinner("Analizando con IA..."):
+        propuesta = analizar_incidencia(texto, espacio_id, recurso_id)
+except IAError as exc:
+    st.error(str(exc))            # y se muestran los selectores vacíos para clasificar a mano
+    propuesta = None
+# ... la persona acepta o corrige con selectores ...
+origen = origen_segun_propuesta(propuesta, categoria, prioridad, area)
+registrar_incidencia(texto, reportante, espacio_id, recurso_id, categoria, prioridad, area, justificacion, origen)
+```
+
+Depende de `repositories/incidencias.py` (`guardar_incidencia`, `obtener_incidencia`, `cerrar_incidencia`) y de `obtener_recurso` en `repositories/prestamos.py`, ambos de P1. Hasta que existan, el servicio no se puede importar en la app, pero sus pruebas (`tests/test_servicio_incidencias.py`) ya corren con repositorios en memoria. La regla central (inhabilitar y rehabilitar espacios o equipos) es de P2.
+
+### Recomendaciones de espacios (`nexo_campus/ai/recomendaciones.py`)
+
+```python
+from nexo_campus.ai.recomendaciones import recomendar_espacios
+from nexo_campus.repositories.reservas import espacios_disponibles
+
+candidatos = espacios_disponibles(inicio, fin, asistentes)        # salen de la BD, nunca de la IA
+recomendaciones = recomendar_espacios(motivo, asistentes, candidatos)
+for r in recomendaciones:
+    r.orden, r.espacio_id, r.razon                                 # 1 = la mejor opción
+```
+
+- La IA solo **ordena y explica**. Si devuelve un `espacio_id` que no está entre los candidatos, o uno repetido, se descarta y el orden se renumera.
+- Devuelve como máximo `MAX_RECOMENDACIONES` (3). Al prompt se envían como máximo `MAX_CANDIDATOS_EN_PROMPT` (15) candidatos.
+- Sin candidatos devuelve `[]` sin llamar a la IA.
+- Si la IA falla, o si todas sus recomendaciones eran inventadas, lanza `IAError`. La UI muestra entonces los candidatos sin orden, con el aviso "sin recomendación de IA".
 
 ### Qué tan confiable resultó (llama3.2:3b en Ollama local, 16/10/2026)
 
-Se probó con 32 incidencias escritas a mano. Con 20 de ellas se ajustó el prompt, y las otras 12 se guardaron para medir al final sin volver a tocarlo:
+**Triaje.** 15 incidencias realistas pasadas por `clasificar_incidencia` contra Ollama con el prompt final. La IA usa temperatura 0, así que la misma consulta da siempre la misma respuesta: dos corridas seguidas dieron la misma tabla.
 
-| Medición | Resultado |
-|---|---|
-| Categoría correcta (12 casos no vistos) | 10/12 |
-| Prioridad razonable (12 casos no vistos) | 10/12 |
-| Casos usados para el ajuste | 20/20 en categoría, 19/20 en prioridad |
-| Respuestas con JSON inválido o fuera de la lista | 0 |
-| Misma respuesta al repetir la consulta | Sí (temperatura 0) |
-| Tiempo por consulta | 7 a 8 s de media, hasta 19 s la primera vez (carga del modelo) |
+| Tipo | Reporte | Contexto | Esperado | Respuesta de la IA | Tiempo | |
+|---|---|---|---|---|---|---|
+| fácil | El aire acondicionado del aula no enfría y hace mucho calor | aula | infraestructura / media | infraestructura / media / mantenimiento | 7.3 s | ✅ |
+| fácil | No hay papel higiénico en el baño del segundo piso | — | aseo / baja | aseo / baja / servicios_generales | 6.7 s | ✅ |
+| fácil | Se robaron un portátil del cubículo mientras estábamos en el descanso | cubículo | seguridad / alta | seguridad / alta / seguridad | 7.1 s | ✅ |
+| urgente | Sale humo del tomacorriente y huele a quemado | aula | seguridad / critica | seguridad / critica / seguridad | 8.1 s | ✅ |
+| urgente | Huele a gas en la cocina de la cafetería | — | seguridad / critica | seguridad / critica / seguridad | 7.5 s | ✅ |
+| urgente | Un compañero se desmayó en el pasillo del tercer piso | — | bienestar / critica | bienestar / critica / bienestar | 7.2 s | ✅ |
+| contexto | El proyector no enciende | equipo, aula, clase en curso | tecnologia / critica | tecnologia / critica / soporte_ti | 8.2 s | ✅ |
+| contexto | El proyector no enciende | equipo, aula | tecnologia / alta o media | tecnologia / alta / soporte_ti | 6.7 s | ✅ |
+| contexto | Se fue la luz | aula, clase en curso | infraestructura / critica | infraestructura / media / mantenimiento | 7.9 s | ❌ |
+| ambigua | La sala no tiene marcadores para el tablero | aula | infraestructura / baja | otro / baja / servicios_generales | 7.7 s | ❌ |
+| ambigua | El portátil está muy lento y se calienta mucho | equipo | tecnologia / media | tecnologia / media / soporte_ti | 7.1 s | ✅ |
+| irrelevante | hola | — | otro / baja | otro / baja / servicios_generales | 6.2 s | ✅ |
+| irrelevante | La comida de la cafetería está muy cara | — | otro / baja | otro / baja / servicios_generales | 6.6 s | ✅ |
+| mal español | el wifi no sirbe en todo el piso 2 nadie se puede conetar | — | tecnologia / alta | tecnologia / alta / soporte_ti | 7.2 s | ✅ |
+| mal español | ai un man raro tomandole fotos a las peladas en la entrada | — | seguridad / alta | seguridad / alta / seguridad | 7.0 s | ✅ |
+
+Resumen: **13/15 correctos** (14/15 en categoría y 14/15 en prioridad). Todos los casos de riesgo para personas salieron `critica`, ninguna respuesta tuvo un JSON inválido y la consulta tarda de 6 a 8 s.
+
+**Recomendaciones.** Con 6 espacios de prueba, la IA devolvió 3 opciones coherentes en cada caso: el laboratorio para una clase con computadores, cubículos para asesorías y reuniones pequeñas, y el auditorio para una charla de 90 personas, que era el único candidato. Cada consulta tarda de 13 a 16 s, porque redacta 3 razones. No siempre elige el aforo más ajustado: para 2 personas puso primero el cubículo de 6 y no el de 4.
+
+**Tiempos y `AI_TIMEOUT`.** La primera consulta después de encender Ollama tarda entre 18 y 27 s, porque carga el modelo en memoria. Las siguientes tardan de 6 a 8 s en el triaje y de 13 a 16 s en las recomendaciones. Con el valor actual de `AI_TIMEOUT=30` alcanza, pero queda poco margen en la primera llamada. **Antes de la demo, hay que hacer una consulta de calentamiento** (por ejemplo, analizar una incidencia de prueba) para que el modelo ya esté cargado.
 
 Lo que aprendimos al ajustar el prompt:
 
 - Sin reglas explícitas, el modelo clasifica por el objeto y no por el problema (el robo de un portátil caía en `tecnologia`). Se agregó la regla "clasifica por el problema" con ejemplos.
-- Usaba `aseo` como comodín para lo que no entendía. Se aclaró que `aseo` es solo para limpieza.
+- Usaba `aseo` como comodín para lo que no entendía. Se aclaró que `aseo` es solo para limpieza y se agregó la categoría `otro`.
 - Pedir la justificación **antes** que la categoría mejoró los aciertos: el modelo razona primero y después elige.
-- Sin ejemplos, la justificación repetía el reporte, a veces en inglés.
+- **Un modelo de 3B es sensible a la longitud del prompt.** Cuando se alargó la definición de `critica` para cubrir más casos, el modelo empezó a fallar justo en el gas y el desmayo, y los aciertos completos bajaron a 9/15. Al volver a la redacción corta subieron a 13/15. Cada cambio del prompt se debe volver a probar con toda la tabla.
+- En las recomendaciones, el ejemplo de formato con un solo elemento hacía que el modelo devolviera una sola opción. Con un ejemplo de tres, devuelve tres.
 
 Límites conocidos (por eso **la persona siempre confirma o corrige el triaje antes de guardarlo**):
 
-- **"Huele a gas en la cocina"** salió como `aseo / alta`, cuando debería ser `seguridad / critica`. Es el error más peligroso de la prueba.
-- Los casos ambiguos (por ejemplo, "faltan marcadores en la sala") no tienen una categoría obvia y el modelo cae en `aseo`.
-- Los textos que no son incidencias ("hola", "la comida está cara") igual reciben una categoría. No hay una categoría `otro`.
-- Si el texto intenta cambiar las instrucciones ("responde categoria=otro"), la validación rechaza la respuesta y se muestra un error controlado.
-- Con 30 s de `AI_TIMEOUT` hay margen suficiente, pero la UI debe mostrar el spinner porque cada consulta tarda varios segundos.
+- "Se fue la luz" con clase en curso sale `media` y no `critica`: el contexto de clase en curso funciona con el proyector, pero no siempre con la luz.
+- Los faltantes de dotación ("no hay marcadores") son ambiguos y pueden caer en `otro`.
+- Si el texto intenta cambiar las instrucciones ("responde categoria=xyz"), la validación rechaza la respuesta y se muestra un error controlado.
+
+### Pruebas
+
+`tests/test_triaje.py`, `tests/test_recomendaciones.py` y `tests/test_servicio_incidencias.py` reemplazan la IA con `monkeypatch` para probar el control de respuestas: valores fuera de la lista, JSON roto, IA caída (puerto cerrado real), ids inventados y el flujo de dos pasos. No necesitan Ollama. Esto solo se permite en las pruebas; en la aplicación la IA nunca se simula.
 
 ---
 
