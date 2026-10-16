@@ -8,6 +8,10 @@ from nexo_campus.models.enums import EstadoIncidencia, OrigenClasificacion, Prio
 class Incidencia(SQLModel, table=True):
     """Incidencia o solicitud reportada sobre un espacio, un recurso o el campus en general."""
 
+    # Streamlit vuelve a importar los módulos al detectar cambios; sin esto falla con
+    # "Table ... is already defined for this MetaData instance".
+    __table_args__ = {"extend_existing": True}
+
     id: int | None = Field(default=None, primary_key=True)
     codigo_origen: str | None = Field(default=None, index=True)  # ID en los datos oficiales, si venía
     descripcion: str  # texto original del reporte

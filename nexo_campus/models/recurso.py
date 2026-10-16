@@ -6,6 +6,10 @@ from nexo_campus.models.enums import EstadoRecurso
 class Recurso(SQLModel, table=True):
     """Equipo tecnológico prestable (portátil, proyector, etc.)."""
 
+    # Streamlit vuelve a importar los módulos al detectar cambios; sin esto falla con
+    # "Table ... is already defined for this MetaData instance".
+    __table_args__ = {"extend_existing": True}
+
     id: str = Field(primary_key=True)  # código de los datos oficiales (ej. PC-001)
     nombre: str
     tipo: str = Field(index=True)  # portatil, proyector, tablet...

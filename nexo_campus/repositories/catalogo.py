@@ -1,4 +1,4 @@
-"""Consultas de solo lectura sobre los datos cargados (tablas de la pantalla de inicio)."""
+"""Consultas del catálogo (espacios, recursos, incidencias y reporte de calidad) y registro de espacios y recursos."""
 
 from sqlalchemy import Engine
 from sqlmodel import select
@@ -20,6 +20,24 @@ def listar_recursos(motor_db: Engine = db.motor) -> list[Recurso]:
 def listar_incidencias(motor_db: Engine = db.motor) -> list[Incidencia]:
     with db.obtener_sesion(motor_db) as sesion:
         return list(sesion.exec(select(Incidencia).order_by(Incidencia.id)))
+
+
+def guardar_espacio(espacio: Espacio, motor_db: Engine = db.motor) -> Espacio:
+    """Crea el espacio si su código no existe; si ya existe, lo actualiza."""
+    with db.obtener_sesion(motor_db) as sesion:
+        guardado = sesion.merge(espacio)
+        sesion.commit()
+        sesion.refresh(guardado)
+        return guardado
+
+
+def guardar_recurso(recurso: Recurso, motor_db: Engine = db.motor) -> Recurso:
+    """Crea el recurso si su código no existe; si ya existe, lo actualiza (el estado se cambia aparte, con historial)."""
+    with db.obtener_sesion(motor_db) as sesion:
+        guardado = sesion.merge(recurso)
+        sesion.commit()
+        sesion.refresh(guardado)
+        return guardado
 
 
 def listar_inconsistencias(

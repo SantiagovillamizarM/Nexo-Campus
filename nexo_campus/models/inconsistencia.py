@@ -8,6 +8,10 @@ from nexo_campus.models.enums import TipoInconsistencia
 class RegistroInconsistente(SQLModel, table=True):
     """Problema encontrado al cargar los datos oficiales. Es la evidencia del reporte de calidad."""
 
+    # Streamlit vuelve a importar los módulos al detectar cambios; sin esto falla con
+    # "Table ... is already defined for this MetaData instance".
+    __table_args__ = {"extend_existing": True}
+
     id: int | None = Field(default=None, primary_key=True)
     entidad: str = Field(index=True)  # espacios, recursos, reservas...
     archivo: str | None = None

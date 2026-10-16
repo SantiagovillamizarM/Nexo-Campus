@@ -8,6 +8,10 @@ from nexo_campus.models.enums import EstadoReserva
 class Reserva(SQLModel, table=True):
     """Reserva de un espacio en una franja horaria."""
 
+    # Streamlit vuelve a importar los módulos al detectar cambios; sin esto falla con
+    # "Table ... is already defined for this MetaData instance".
+    __table_args__ = {"extend_existing": True}
+
     id: int | None = Field(default=None, primary_key=True)
     codigo_origen: str | None = Field(default=None, index=True)  # ID en los datos oficiales, si venía
     espacio_id: str = Field(foreign_key="espacio.id", index=True)

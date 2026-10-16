@@ -59,6 +59,7 @@ class OrigenCambioEstado(str, Enum):
     prestamo = "prestamo"
     devolucion = "devolucion"
     incidencia = "incidencia"
+    edicion = "edicion"  # una persona cambió el estado desde la pantalla de administración
 
 
 class TipoInconsistencia(str, Enum):

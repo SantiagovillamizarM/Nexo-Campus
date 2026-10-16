@@ -281,7 +281,27 @@ Reglas previstas:
 
 ## 8. Uso de la IA
 
-### Cómo funciona la conexión
+### Proveedor principal: Gemini
+
+Desde el 16/10/2026 el equipo usa **Gemini 2.5 Flash** (Google AI Studio) por su endpoint compatible con OpenAI. No cambió nada del código: solo el `.env`.
+
+```env
+AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+AI_API_KEY=<clave de Google AI Studio, solo en el .env>
+AI_MODEL=gemini-2.5-flash
+```
+
+| Prueba (16/10/2026) | llama3.2:3b | Gemini 2.5 Flash |
+|---|---|---|
+| "Huele a gas en la cocina" | aseo / alta ❌ | seguridad / crítica ✅ |
+| Robo, desmayo, aire acondicionado, falta de papel | — | 4/4 correctos |
+| Tiempo por consulta | 7–8 s | ~2 s |
+
+- **Límite de consultas**: el plan gratuito limita las consultas por minuto (error 429). `cliente.py` reintenta una vez tras `ESPERA_LIMITE_SEGUNDOS` y, si sigue el límite, muestra "Se alcanzó el límite de consultas a la IA". No hagan pruebas en ráfaga antes de la demo.
+- **Necesita internet**. Sin conexión, se vuelve a Ollama cambiando las tres líneas del `.env` (están comentadas en `.env.example`).
+- La clave es **real**: va solo en el `.env`. Revisar `git status` antes de cada commit.
+
+### Respaldo local: Ollama
 
 Ollama es un programa que corre el modelo **en tu propia máquina** y abre una API en `http://localhost:11434/v1`. Esa API imita la de OpenAI, por eso usamos la librería `openai` para hablar con ella. No hay que pagar ni crear cuenta, y no sale nada a internet.
 

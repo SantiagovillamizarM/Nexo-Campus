@@ -1,29 +1,32 @@
-"""Esqueleto de la interfaz: ejecutar con python -m streamlit run app.py."""
+"""Punto de entrada de la interfaz: python -m streamlit run app.py"""
+
+import sys
+from pathlib import Path
 
 import streamlit as st
 
+# Garantiza que el paquete nexo_campus se encuentre sin importar desde qué carpeta se ejecute.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-st.set_page_config(page_title="Nexo Campus", page_icon="🏫", layout="wide")
+from nexo_campus import db  # noqa: E402
+from nexo_campus.repositories import catalogo  # noqa: E402
+from nexo_campus.ui import componentes as ui  # noqa: E402
+from nexo_campus.ui import espacios, incidencias, inicio, recursos  # noqa: E402
+from nexo_campus.ui.estilos import aplicar_estilos  # noqa: E402
 
-st.title("Nexo Campus")
-st.caption("Gestión operativa de Campuslands · Interfaz en etapa inicial")
+# Cada módulo de la interfaz expone TITULO, DESCRIPCION y mostrar()
+PAGINAS = {modulo.TITULO: modulo for modulo in (inicio, espacios, recursos, incidencias)}
 
-inicio, espacios, recursos, incidencias = st.tabs(
-    ["Inicio", "Espacios", "Recursos", "Incidencias"]
-)
+st.set_page_config(page_title="Nexo Campus", page_icon="✦", layout="wide", initial_sidebar_state="expanded")
+aplicar_estilos()
+db.crear_tablas()  # crea las tablas vacías si la base todavía no existe; no borra nada
 
-with inicio:
-    st.header("Inicio")
-    st.write("Aquí se mostrará el resumen de la operación del campus.")
+with st.sidebar:
+    ui.marca()
+    seleccion = st.radio("Módulos", list(PAGINAS), label_visibility="collapsed", key="pagina")
+    ui.estado_sistema(hay_datos=bool(catalogo.listar_espacios() or catalogo.listar_recursos()))
 
-with espacios:
-    st.header("Espacios")
-    st.write("Aquí se mostrarán los espacios y las reservas.")
-
-with recursos:
-    st.header("Recursos")
-    st.write("Aquí se mostrarán los equipos, los préstamos y las devoluciones.")
-
-with incidencias:
-    st.header("Incidencias")
-    st.write("Aquí se mostrarán las incidencias y las solicitudes del campus.")
+ui.mostrar_aviso_pendiente()
+pagina = PAGINAS[seleccion]
+ui.encabezado_pagina(pagina.TITULO, pagina.DESCRIPCION)
+pagina.mostrar()
