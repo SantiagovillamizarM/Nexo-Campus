@@ -55,6 +55,8 @@ _TEXTOS = {
     "bienestar_estudiantil": "Bienestar estudiantil",
     "servicios_generales": "Servicios generales",
     "cubiculo": "Cubículo",
+    "sala_de_computo": "Sala de cómputo",
+    "pc_torre": "PC de torre",
     "otro": "Otro",
     "portatil": "Portátil",
 }

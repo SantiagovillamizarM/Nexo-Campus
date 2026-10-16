@@ -1,0 +1,11 @@
+codigo,nombre,tipo,aforo,ubicacion,estado
+AUDITORIO,Auditorio,auditorio,100,,disponible
+COSMOS,Cosmos,sala,25,,disponible
+SKILAB,Skilab,sala_de_computo,20,,disponible
+SPUTNIK,Sputnik,sala_de_computo,38,,disponible
+APOLO,Apolo,sala_de_computo,34,,disponible
+BLANCA,Sala Blanca,cubiculo,12,,disponible
+AZUL,Sala Azul,cubiculo,10,,disponible
+AMARILLA,Sala Amarilla,cubiculo,6,,disponible
+VERDE,Sala Verde,cubiculo,6,,disponible
+ARTEMIS,Artemis,sala_de_computo,32,,disponible
