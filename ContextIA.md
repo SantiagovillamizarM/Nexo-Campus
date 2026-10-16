@@ -312,7 +312,11 @@ AI_MODEL=gemini-2.5-flash
 | Robo, desmayo, aire acondicionado, falta de papel | — | 4/4 correctos |
 | Tiempo por consulta | 7–8 s | ~2 s |
 
-- **Límite de consultas**: el plan gratuito limita las consultas por minuto (error 429). `cliente.py` reintenta una vez tras `ESPERA_LIMITE_SEGUNDOS` y, si sigue el límite, muestra "Se alcanzó el límite de consultas a la IA". No hagan pruebas en ráfaga antes de la demo.
+- **Cuota diaria (importante para la demo)**: el plan gratuito permite **solo 20 consultas por día por modelo** (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`). El 16/10/2026 se agotó la de `gemini-2.5-flash` con las pruebas. Por eso:
+  - El modelo principal es `gemini-2.5-flash-lite` (1–2 s por consulta, mismos resultados en las pruebas clave) y el respaldo es `gemini-2.5-flash` (`AI_MODELO_RESPALDO`). Si uno agota su cuota, `cliente.py` usa el otro sin esperar.
+  - Si los dos se agotan, la app muestra "Se alcanzó el límite de consultas…" y se clasifica manualmente.
+  - **No gasten consultas el día de la demo**: cada "Analizar con IA" y cada reserva rechazada con alternativas consume una. Para más margen, activar facturación en el proyecto de Google AI Studio (el nivel pagado tiene límites mucho más altos y cuesta fracciones de centavo por consulta).
+- **Cambios del `.env` sin reiniciar**: `config.py` vuelve a leer la IA si el archivo cambió, así que cambiar la clave o el modelo se aplica en la siguiente consulta.
 - **Necesita internet**. Sin conexión, se vuelve a Ollama cambiando las tres líneas del `.env` (están comentadas en `.env.example`).
 - La clave es **real**: va solo en el `.env`. Revisar `git status` antes de cada commit.
 

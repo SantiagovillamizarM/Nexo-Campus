@@ -34,9 +34,9 @@ def _crear_cliente() -> OpenAI:
 def _completar(mensajes: list[dict[str, str]], formato_json: bool) -> str:
     extra = {"response_format": {"type": "json_object"}} if formato_json else {}
 
-    def pedir():
+    def pedir(modelo: str):
         return _crear_cliente().chat.completions.create(
-            model=config.AI_MODEL,
+            model=modelo,
             messages=mensajes,
             temperature=0,
             **extra,
@@ -44,17 +44,25 @@ def _completar(mensajes: list[dict[str, str]], formato_json: bool) -> str:
 
     try:
         try:
-            respuesta = pedir()
+            respuesta = pedir(config.AI_MODEL)
         except openai.RateLimitError:
-            # El plan gratuito de Gemini limita las consultas por minuto: se reintenta una sola vez.
-            time.sleep(ESPERA_LIMITE_SEGUNDOS)
-            respuesta = pedir()
+            # El plan gratuito de Gemini limita las consultas por minuto y por día, por modelo.
+            # Con un modelo de respaldo se usa ese de inmediato; si no, se reintenta una sola vez.
+            respaldo = config.AI_MODELO_RESPALDO
+            if respaldo and respaldo != config.AI_MODEL:
+                respuesta = pedir(respaldo)
+            else:
+                time.sleep(ESPERA_LIMITE_SEGUNDOS)
+                respuesta = pedir(config.AI_MODEL)
     except openai.APITimeoutError as exc:
         raise IAError(f"La IA no respondió en {config.AI_TIMEOUT} segundos.") from exc
     except openai.APIConnectionError as exc:
         raise IAError("No se pudo conectar con el servicio de IA. Verifica la conexión a internet o que el servicio esté en ejecución.") from exc
     except openai.RateLimitError as exc:
-        raise IAError("Se alcanzó el límite de consultas a la IA. Espera un minuto e intenta de nuevo.") from exc
+        raise IAError(
+            "Se alcanzó el límite de consultas a la IA. Espera un minuto e intenta de nuevo; "
+            "si persiste, se agotó la cuota diaria del plan gratuito (clasifica manualmente)."
+        ) from exc
     except (openai.AuthenticationError, openai.PermissionDeniedError) as exc:
         raise IAError("La clave de la IA no es válida o no tiene permisos. Revisa AI_API_KEY en el archivo .env.") from exc
     except openai.NotFoundError as exc:

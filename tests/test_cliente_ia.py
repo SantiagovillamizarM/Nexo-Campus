@@ -19,11 +19,13 @@ class ServicioFalso:
     def __init__(self, *errores):
         self.errores = list(errores)
         self.llamadas = 0
+        self.modelos: list[str] = []
         self.chat = self
         self.completions = self
 
-    def create(self, **_):
+    def create(self, **datos):
         self.llamadas += 1
+        self.modelos.append(datos["model"])
         if self.errores:
             raise self.errores.pop(0)
         mensaje = type("Mensaje", (), {"content": "hola"})()
@@ -33,6 +35,8 @@ class ServicioFalso:
 @pytest.fixture
 def servicio(monkeypatch):
     monkeypatch.setattr(cliente, "ESPERA_LIMITE_SEGUNDOS", 0)
+    monkeypatch.setattr(cliente.config, "AI_MODEL", "modelo-principal")
+    monkeypatch.setattr(cliente.config, "AI_MODELO_RESPALDO", "")
 
     def instalar(*errores):
         falso = ServicioFalso(*errores)
@@ -67,4 +71,18 @@ def test_limite_persistente_da_mensaje_claro(servicio):
 def test_errores_del_servicio(servicio, clase, codigo, mensaje):
     servicio(_error(clase, codigo))
     with pytest.raises(IAError, match=mensaje):
+        cliente.consultar_texto("hola")
+
+
+def test_sin_cuota_usa_el_modelo_de_respaldo(servicio, monkeypatch):
+    monkeypatch.setattr(cliente.config, "AI_MODELO_RESPALDO", "modelo-respaldo")
+    falso = servicio(_error(openai.RateLimitError, 429))
+    assert cliente.consultar_texto("hola") == "hola"
+    assert falso.modelos == ["modelo-principal", "modelo-respaldo"]
+
+
+def test_si_el_respaldo_tambien_se_agota_da_mensaje_claro(servicio, monkeypatch):
+    monkeypatch.setattr(cliente.config, "AI_MODELO_RESPALDO", "modelo-respaldo")
+    servicio(_error(openai.RateLimitError, 429), _error(openai.RateLimitError, 429))
+    with pytest.raises(IAError, match="cuota diaria"):
         cliente.consultar_texto("hola")
