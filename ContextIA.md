@@ -325,6 +325,51 @@ Cualquier fallo (Ollama apagado, tiempo de espera, error del servidor, JSON inv�
 6. El cliente de IA usa `config.AI_BASE_URL`, `config.AI_API_KEY`, `config.AI_MODEL` y `config.AI_TIMEOUT`.
 7. Nadie crea otro cliente de `openai` por su cuenta: todas las llamadas pasan por `nexo_campus/ai/cliente.py`.
 
+### Triaje de incidencias (`nexo_campus/ai/triaje.py`)
+
+```python
+from nexo_campus.ai.triaje import clasificar_incidencia
+
+triaje = clasificar_incidencia("El proyector del aula 204 no enciende")
+triaje.categoria          # "tecnologia"
+triaje.prioridad          # Prioridad.alta (Enum de models)
+triaje.area_responsable   # "soporte_ti"
+triaje.justificacion      # frase corta en español
+```
+
+- Las listas permitidas están en constantes al inicio del archivo. `AREA_POR_CATEGORIA` define a qué área se enruta cada categoría (`infraestructura → mantenimiento`, `tecnologia → soporte_ti`, `aseo → servicios_generales`, `seguridad → seguridad`, `bienestar → bienestar_estudiantil`). Para agregar o cambiar una categoría solo se edita ese diccionario.
+- La respuesta se rechaza (`IAError`) si la IA inventa una categoría, una prioridad o un área fuera de la lista, si deja vacía la justificación o si el área no corresponde a la categoría.
+- Si el texto está vacío o supera `MAX_CARACTERES_INCIDENCIA` (1000), lanza `NexoCampusError` sin llamar a la IA.
+- Las pruebas de la validación están en `tests/test_triaje.py` y no necesitan Ollama.
+
+### Qué tan confiable resultó (llama3.2:3b en Ollama local, 16/10/2026)
+
+Se probó con 32 incidencias escritas a mano. Con 20 de ellas se ajustó el prompt, y las otras 12 se guardaron para medir al final sin volver a tocarlo:
+
+| Medición | Resultado |
+|---|---|
+| Categoría correcta (12 casos no vistos) | 10/12 |
+| Prioridad razonable (12 casos no vistos) | 10/12 |
+| Casos usados para el ajuste | 20/20 en categoría, 19/20 en prioridad |
+| Respuestas con JSON inválido o fuera de la lista | 0 |
+| Misma respuesta al repetir la consulta | Sí (temperatura 0) |
+| Tiempo por consulta | 7 a 8 s de media, hasta 19 s la primera vez (carga del modelo) |
+
+Lo que aprendimos al ajustar el prompt:
+
+- Sin reglas explícitas, el modelo clasifica por el objeto y no por el problema (el robo de un portátil caía en `tecnologia`). Se agregó la regla "clasifica por el problema" con ejemplos.
+- Usaba `aseo` como comodín para lo que no entendía. Se aclaró que `aseo` es solo para limpieza.
+- Pedir la justificación **antes** que la categoría mejoró los aciertos: el modelo razona primero y después elige.
+- Sin ejemplos, la justificación repetía el reporte, a veces en inglés.
+
+Límites conocidos (por eso **la persona siempre confirma o corrige el triaje antes de guardarlo**):
+
+- **"Huele a gas en la cocina"** salió como `aseo / alta`, cuando debería ser `seguridad / critica`. Es el error más peligroso de la prueba.
+- Los casos ambiguos (por ejemplo, "faltan marcadores en la sala") no tienen una categoría obvia y el modelo cae en `aseo`.
+- Los textos que no son incidencias ("hola", "la comida está cara") igual reciben una categoría. No hay una categoría `otro`.
+- Si el texto intenta cambiar las instrucciones ("responde categoria=otro"), la validación rechaza la respuesta y se muestra un error controlado.
+- Con 30 s de `AI_TIMEOUT` hay margen suficiente, pero la UI debe mostrar el spinner porque cada consulta tarda varios segundos.
+
 ---
 
 ## 9. Datos oficiales
