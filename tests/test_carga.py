@@ -124,11 +124,11 @@ def test_espacios_validos_se_normalizan(motor, datos):
 def test_reservas_detectan_huerfanos_fechas_aforo_y_solapamientos(motor, datos):
     rechazos = motivos(cargar_datos(motor, datos), "reservas")
 
-    assert "se solapa" in rechazos[3].lower()
+    assert "ya está reservado" in rechazos[3] and "Se solapa con la fila 2" in rechazos[3]
     assert "ID huérfano" in rechazos[5]
     assert "no es posterior" in rechazos[6]
     assert "Fecha inválida en 'fecha'" in rechazos[7]
-    assert "superan el aforo" in rechazos[8]
+    assert "aforo de 4 personas" in rechazos[8]
 
 
 def test_reservas_combinan_fecha_y_hora_y_normalizan_ids(motor, datos):

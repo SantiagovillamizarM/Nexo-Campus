@@ -6,7 +6,6 @@ Ningún registro inválido se descarta en silencio: queda en la tabla RegistroIn
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy import Engine
@@ -27,7 +26,7 @@ from nexo_campus.carga.esquema import (
 )
 from nexo_campus.carga.lectura import buscar_archivo, leer_tabla, mapear_columnas
 from nexo_campus.carga.normalizacion import DatoInvalido
-from nexo_campus.errors import DatosInconsistentesError, NexoCampusError
+from nexo_campus.errors import DatosInconsistentesError, NexoCampusError, ReglaNegocioError
 from nexo_campus.models import (
     Espacio,
     EstadoEspacio,
@@ -44,6 +43,7 @@ from nexo_campus.models import (
     Reserva,
     TipoInconsistencia,
 )
+from nexo_campus.rules import reservas as reglas_reservas
 
 # Orden de carga: primero lo que otros registros referencian
 ENTIDADES = ("espacios", "recursos", "reservas", "prestamos", "incidencias")
@@ -81,7 +81,8 @@ class _Contexto:
     espacios: dict[str, Espacio] = field(default_factory=dict)
     recursos: dict[str, Recurso] = field(default_factory=dict)
     filas_recursos: dict[str, int] = field(default_factory=dict)
-    reservas_activas: dict[str, list[tuple[datetime, datetime, int]]] = field(default_factory=lambda: defaultdict(list))
+    reservas_activas: dict[str, list[Reserva]] = field(default_factory=lambda: defaultdict(list))
+    filas_reservas: dict[int, int] = field(default_factory=dict)  # id(reserva) -> fila del archivo
     prestamos_activos: dict[str, int] = field(default_factory=dict)
     inconsistencias: list[RegistroInconsistente] = field(default_factory=list)
 
@@ -155,16 +156,7 @@ def _a_reserva(f: dict[str, str], ctx: _Contexto, avisos: list[str], fila: int) 
     )
     solicitante = n.texto(f.get("solicitante"), "solicitante")
 
-    # Una reserva cancelada no ocupa el espacio, así que no entra en conflicto con nada.
-    if estado is EstadoReserva.activa:
-        if asistentes > espacio.aforo:
-            raise DatoInvalido(f"{asistentes} asistentes superan el aforo de {espacio.id} ({espacio.aforo})")
-        for otro_inicio, otro_fin, otra_fila in ctx.reservas_activas[espacio_id]:
-            if inicio < otro_fin and otro_inicio < fin:
-                raise DatoInvalido(f"Se solapa con la reserva de la fila {otra_fila} en el espacio {espacio_id}")
-        ctx.reservas_activas[espacio_id].append((inicio, fin, fila))
-
-    return Reserva(
+    reserva = Reserva(
         codigo_origen=n.codigo(f.get("id"), "id", obligatorio=False),
         espacio_id=espacio_id,
         solicitante=solicitante,
@@ -174,6 +166,31 @@ def _a_reserva(f: dict[str, str], ctx: _Contexto, avisos: list[str], fila: int) 
         motivo=n.texto(f.get("motivo"), "motivo", obligatorio=False),
         estado=estado,
     )
+
+    # Una reserva cancelada no ocupa el espacio, así que no entra en conflicto con nada.
+    if estado is EstadoReserva.activa:
+        _validar_reserva_activa(reserva, espacio, ctx)
+        ctx.reservas_activas[espacio_id].append(reserva)
+        ctx.filas_reservas[id(reserva)] = fila
+
+    return reserva
+
+
+def _validar_reserva_activa(reserva: Reserva, espacio: Espacio, ctx: _Contexto) -> None:
+    """Aplica las mismas reglas de aforo y solapamiento que la aplicación (rules/reservas.py)."""
+    conflictos = [
+        otra for otra in ctx.reservas_activas[espacio.id]
+        if reglas_reservas.se_solapan(otra.inicio, otra.fin, reserva.inicio, reserva.fin)
+    ]
+    try:
+        reglas_reservas.validar_aforo(reserva.asistentes, espacio.aforo)
+    except ReglaNegocioError as exc:
+        raise DatoInvalido(str(exc)) from exc
+    try:
+        reglas_reservas.validar_sin_solapamiento(conflictos)
+    except ReglaNegocioError as exc:
+        filas = ", ".join(str(ctx.filas_reservas[id(otra)]) for otra in conflictos)
+        raise DatoInvalido(f"{exc} Se solapa con la fila {filas}.") from exc
 
 
 def _a_prestamo(f: dict[str, str], ctx: _Contexto, avisos: list[str], fila: int) -> Prestamo:
