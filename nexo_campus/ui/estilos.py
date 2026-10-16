@@ -246,6 +246,7 @@ html, body, [class*="css"], .stMarkdown, button, input, textarea { font-family: 
   background: linear-gradient(145deg, var(--nc-azul), var(--nc-cobalto));
 }
 .nc-logo::after { content: "✦"; position: absolute; top: -6px; right: -5px; font-size: 10px; color: var(--nc-bruma); }
+.nc-logo-img { width: 52px; height: 52px; flex-shrink: 0; object-fit: contain; filter: drop-shadow(0 0 6px rgba(110, 146, 242, .35)); }
 .nc-marca-nombre { font-weight: 700; font-size: 1rem; color: var(--nc-luz); line-height: 1.2; }
 .nc-marca-detalle { font-size: .75rem; color: var(--nc-gris); }
 .nc-menu-titulo { font-size: .7rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--nc-gris); padding: 0 .3rem .4rem; }

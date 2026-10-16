@@ -13,6 +13,7 @@ import streamlit as st
 from nexo_campus import config
 from nexo_campus.errors import NexoCampusError
 from nexo_campus.ui.estilos import COLORES
+from nexo_campus.ui.logo import logo_data_uri
 
 Resultado = TypeVar("Resultado")
 log = logging.getLogger(__name__)
@@ -115,10 +116,13 @@ def badge(valor: str | None) -> str:
 
 
 def marca() -> None:
+    uri = logo_data_uri()
+    # Si falta el archivo del logo, se mantiene la insignia con la "N"
+    logo = f'<img class="nc-logo-img" src="{uri}" alt="Logo de Nexo Campus">' if uri else '<div class="nc-logo">N</div>'
     _html(
-        """
+        f"""
         <div class="nc-marca">
-          <div class="nc-logo">N</div>
+          {logo}
           <div>
             <div class="nc-marca-nombre">Nexo Campus</div>
             <div class="nc-marca-detalle">Gestión operativa · Campuslands</div>
