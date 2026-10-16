@@ -276,7 +276,7 @@ Reglas implementadas (archivo y constante para la modificación en vivo):
 | 2 | Los asistentes no superan el aforo | `rules/reservas.py` | — |
 | 3 | No se reservan espacios en mantenimiento o inhabilitados | `rules/reservas.py` | `ESTADOS_RESERVABLES` |
 | — | Horario del campus, duración mínima y máxima, nada en el pasado | `rules/reservas.py` | `HORA_APERTURA`, `HORA_CIERRE`, `DURACION_MINIMA_MINUTOS`, `DURACION_MAXIMA_HORAS` |
-| 4 | Solo se presta un equipo disponible y que se pueda llevar (los PC de torre no) | `rules/prestamos.py` | `ESTADOS_PRESTABLES`, `TIPOS_NO_PRESTABLES` |
+| 4 | Solo se presta un equipo disponible. Los PC de torre no se prestan sueltos: reservar su sala presta todos sus PCs operativos (`services/reservas.py → pcs_de_la_sala`, `prestamos_de_salas`, `pcs_en_uso`; el PC se liga a la sala por `ubicacion`) | `rules/prestamos.py` | `ESTADOS_PRESTABLES`, `TIPOS_NO_PRESTABLES` |
 | 5 | Límite de préstamos activos por persona y duración máxima | `rules/prestamos.py` | `MAX_PRESTAMOS_ACTIVOS`, `DIAS_MAXIMOS_PRESTAMO` |
 | — | Códigos válidos y únicos; el aforo no baja de una reserva futura; "prestado" no se pone a mano | `rules/catalogo.py` | `PATRON_CODIGO`, `AFORO_MAXIMO` |
 | 6 | **Regla central** (ver abajo) | `rules/central.py` + `services/regla_central.py` | `PRIORIDADES_QUE_BLOQUEAN` |

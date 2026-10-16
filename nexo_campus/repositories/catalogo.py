@@ -4,6 +4,7 @@ from sqlalchemy import Engine
 from sqlmodel import select
 
 from nexo_campus import db
+from nexo_campus.carga.normalizacion import normalizar_clave
 from nexo_campus.errors import ReglaNegocioError
 from nexo_campus.models import (
     Espacio,
@@ -30,6 +31,14 @@ def listar_recursos(motor_db: Engine = db.motor) -> list[Recurso]:
 def listar_incidencias(motor_db: Engine = db.motor) -> list[Incidencia]:
     with db.obtener_sesion(motor_db) as sesion:
         return list(sesion.exec(select(Incidencia).order_by(Incidencia.id)))
+
+
+def recursos_en_espacio(espacio: Espacio, motor_db: Engine = db.motor) -> list[Recurso]:
+    """Equipos ubicados en el espacio (por su ubicación: 'Apolo' coincide con el espacio APOLO / Apolo)."""
+    claves = {normalizar_clave(espacio.id), normalizar_clave(espacio.nombre)}
+    with db.obtener_sesion(motor_db) as sesion:
+        recursos = sesion.exec(select(Recurso).where(Recurso.ubicacion.is_not(None)).order_by(Recurso.id))
+        return [r for r in recursos if normalizar_clave(r.ubicacion) in claves]
 
 
 def guardar_espacio(espacio: Espacio, motor_db: Engine = db.motor) -> Espacio:

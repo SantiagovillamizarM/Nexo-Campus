@@ -18,9 +18,26 @@ DESCRIPCION = "Reserva de aulas y cubículos sin cruces de horario ni exceso de 
 MODULO_REPOSITORIO = "nexo_campus.repositories.reservas"
 
 
+def _texto_pcs(pcs) -> str:
+    """'34 PCs' o '32 de 34 PCs operativos' cuando hay equipos fuera de servicio."""
+    if not pcs.total:
+        return ""
+    if not pcs.fuera_de_servicio:
+        return f"{pcs.total} PCs"
+    return f"{len(pcs.operativos)} de {pcs.total} PCs operativos"
+
+
 def _formulario_reserva(espacios: list[Espacio], habilitado: bool) -> None:
+    from nexo_campus.services import reservas as servicio
+
     # Se listan todos los espacios (también los no disponibles) para que la regla de estado explique el rechazo.
-    opciones = {f"{e.id} · {e.nombre} (aforo {e.aforo}) — {ui.etiqueta(e.estado.value)}": e.id for e in espacios}
+    pcs_por_sala = {e.id: servicio.pcs_de_la_sala(e.id) for e in espacios}
+    opciones = {
+        f"{e.id} · {e.nombre} (aforo {e.aforo}"
+        + (f" · {_texto_pcs(pcs_por_sala[e.id])}" if pcs_por_sala[e.id].total else "")
+        + f") — {ui.etiqueta(e.estado.value)}": e.id
+        for e in espacios
+    }
 
     with st.form("form_reserva"):
         col1, col2 = st.columns(2)
@@ -42,13 +59,23 @@ def _formulario_reserva(espacios: list[Espacio], habilitado: bool) -> None:
         st.error("Selecciona un espacio para reservar.", icon="⚠️")
         return
 
-    from nexo_campus.services import reservas as servicio
+    def _mensaje(reserva) -> str:
+        # Reservar una sala de cómputo presta todos sus PCs operativos durante la franja.
+        pcs = pcs_por_sala[reserva.espacio_id]
+        if not pcs.total:
+            return "Reserva confirmada."
+        texto = f"Reserva confirmada · incluye el préstamo de {len(pcs.operativos)} PCs operativos de la sala"
+        if pcs.fuera_de_servicio:
+            texto += f" ({len(pcs.fuera_de_servicio)} fuera de servicio)"
+        if reserva.asistentes > len(pcs.operativos):
+            texto += f". ⚠️ Son {reserva.asistentes} asistentes y solo hay {len(pcs.operativos)} PCs operativos"
+        return texto + "."
 
     inicio, fin = datetime.combine(fecha, hora_inicio), datetime.combine(fecha, hora_fin)
     with st.spinner("Validando aforo, horario y disponibilidad..."):
         reserva = ui.ejecutar(
             lambda: servicio.crear_reserva(opciones[espacio], solicitante, inicio, fin, int(asistentes), motivo),
-            "Reserva confirmada.",
+            _mensaje,
             recargar=True,
         )
     if reserva is None and _franja_valida(inicio, fin):
@@ -206,8 +233,10 @@ def _catalogo(espacios: list[Espacio]) -> None:
         and (tipo == "Todos" or e.tipo == tipo)
         and (estado == "Todos" or e.estado.value == estado)
     ]
-    st.caption(f"{len(filtrados)} de {len(espacios)} espacios")
+    st.caption(f"{len(filtrados)} de {len(espacios)} espacios · los PCs de las salas de cómputo se prestan con la sala al reservarla")
     if filtrados:
+        from nexo_campus.services import reservas as servicio
+
         ui.tabla(
             [
                 {
@@ -215,6 +244,7 @@ def _catalogo(espacios: list[Espacio]) -> None:
                     "Nombre": e.nombre,
                     "Tipo": ui.texto(e.tipo),
                     "Aforo": e.aforo,
+                    "PCs": _texto_pcs(servicio.pcs_de_la_sala(e.id)) or "—",
                     "Ubicación": e.ubicacion or "—",
                     "Estado": ui.etiqueta(e.estado.value),
                 }

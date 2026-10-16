@@ -52,7 +52,10 @@ def _inventario(recursos: list[Recurso]) -> None:
         and (tipo == "Todos" or r.tipo == tipo)
         and (estado == "Todos" or r.estado.value == estado)
     ]
-    st.caption(f"{len(filtrados)} de {len(recursos)} recursos")
+    from nexo_campus.services import reservas as servicio_reservas
+
+    en_uso = servicio_reservas.pcs_en_uso()  # PCs prestados ahora porque su sala está reservada
+    st.caption(f"{len(filtrados)} de {len(recursos)} recursos · {len(en_uso)} PCs en uso con su sala en este momento")
     if filtrados:
         ui.tabla(
             [
@@ -62,6 +65,10 @@ def _inventario(recursos: list[Recurso]) -> None:
                     "Tipo": ui.texto(r.tipo),
                     "Ubicación": r.ubicacion or "—",
                     "Estado": ui.etiqueta(r.estado.value),
+                    "Uso": (
+                        f"Prestado con la sala · reserva #{en_uso[r.id].id} hasta {en_uso[r.id].fin:%H:%M}"
+                        if r.id in en_uso else ""
+                    ),
                 }
                 for r in filtrados
             ],
@@ -81,12 +88,12 @@ def _acciones_prestamo(recursos: list[Recurso], activos: list[Prestamo]) -> None
     }
     st.caption(
         f"Reglas vigentes: máximo {MAX_PRESTAMOS_ACTIVOS} préstamos activos por persona · hasta {DIAS_MAXIMOS_PRESTAMO} días · "
-        f"no se prestan: {', '.join(ui.texto(t) for t in sorted(TIPOS_NO_PRESTABLES))} (se usan reservando su sala)."
+        f"los {', '.join(ui.texto(t) for t in sorted(TIPOS_NO_PRESTABLES))} no se prestan sueltos: se prestan con su sala."
     )
     if not disponibles:
         st.info(
-            "No hay equipos prestables disponibles. Los PC de torre son fijos de su sala; registra portátiles, "
-            "proyectores u otros equipos en la pestaña Administrar.",
+            "No hay equipos individuales disponibles para prestar. Los PC de torre se prestan junto con su sala "
+            "(pestaña Salas de cómputo); para préstamos sueltos registra portátiles o proyectores en Administrar.",
             icon="💻",
         )
     col_prestar, col_devolver = st.columns(2)
@@ -126,7 +133,46 @@ def _acciones_prestamo(recursos: list[Recurso], activos: list[Prestamo]) -> None
                 )
 
 
+def _prestamos_de_salas() -> None:
+    """Los PCs de torre se prestan con su sala: cada reserva de una sala de cómputo es un préstamo de sus PCs."""
+    from nexo_campus.services import reservas as servicio_reservas
+
+    ahora = datetime.now()
+    prestamos = servicio_reservas.prestamos_de_salas(desde=ahora)
+    st.caption("Al reservar una sala de cómputo en Espacios se prestan todos sus PCs operativos durante la reserva.")
+    if not prestamos:
+        ui.estado_vacio(
+            "No hay salas de cómputo reservadas",
+            "Reserva Apolo, Skilab, Sputnik o Artemis en <code>Espacios → Reservar</code> y sus PCs aparecerán aquí.",
+        )
+        return
+    ui.tabla(
+        [
+            {
+                "Reserva": f"#{reserva.id}",
+                "Sala": espacio.nombre,
+                "Solicitante": reserva.solicitante,
+                "Fecha": f"{reserva.inicio:%d/%m/%Y}",
+                "Horario": f"{reserva.inicio:%H:%M} – {reserva.fin:%H:%M}",
+                "PCs prestados": f"{len(pcs.operativos)} de {pcs.total}",
+                "Asistentes": reserva.asistentes,
+                "Momento": "En curso" if reserva.inicio <= ahora else "Próxima",
+            }
+            for reserva, espacio, pcs in prestamos
+        ],
+        altura=300,
+    )
+
+
 def _prestamos(recursos: list[Recurso]) -> None:
+    pestana_salas, pestana_individuales = st.tabs(["Salas de cómputo (con sus PCs)", "Equipos individuales"])
+    with pestana_salas:
+        _prestamos_de_salas()
+    with pestana_individuales:
+        _prestamos_individuales(recursos)
+
+
+def _prestamos_individuales(recursos: list[Recurso]) -> None:
     from nexo_campus.repositories import prestamos as repositorio
 
     todos = repositorio.listar_prestamos()

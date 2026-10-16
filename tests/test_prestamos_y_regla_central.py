@@ -40,7 +40,7 @@ def test_regla4_equipo_disponible_se_puede_prestar():
 @pytest.mark.parametrize(
     ("recurso", "mensaje"),
     [
-        (portatil(tipo="pc_torre"), "equipo fijo de su sala"),
+        (portatil(tipo="pc_torre"), "no se presta por separado"),
         (portatil(EstadoRecurso.prestado), "'prestado'"),
         (portatil(EstadoRecurso.mantenimiento), "'mantenimiento'"),
         (portatil(EstadoRecurso.danado), "'danado'"),
@@ -149,7 +149,7 @@ def test_regla5_en_el_servicio(base):
 
 
 def test_pc_de_torre_no_se_presta(base):
-    with pytest.raises(ReglaNegocioError, match="reserva la sala"):
+    with pytest.raises(ReglaNegocioError, match="junto con todos los PCs de la sala Apolo"):
         servicio.prestar_recurso("APOLO-PC01", "Luis", MANANA)
 
 
@@ -221,3 +221,32 @@ def test_equipo_prestado_se_bloquea_al_devolverse(base):
     assert estado_recurso("PT-02") is EstadoRecurso.inhabilitado
     servicio_incidencias.cerrar_incidencia(grave.id)
     assert estado_recurso("PT-02") is EstadoRecurso.disponible
+
+
+# --- PCs que se prestan junto con su sala ---------------------------------------------------------
+
+
+def test_reservar_la_sala_presta_sus_pcs_operativos(base):
+    from nexo_campus.models import Reserva
+    from nexo_campus.services import catalogo
+
+    catalogo.crear_recurso("APOLO-PC02", "PC de torre 02", "pc_torre", "apolo")  # la ubicación no distingue mayúsculas
+    catalogo.actualizar_recurso("APOLO-PC02", "PC de torre 02", "pc_torre", "apolo", EstadoRecurso.danado, "No enciende")
+
+    pcs = servicio_reservas.pcs_de_la_sala("APOLO")
+    assert ([p.id for p in pcs.operativos], [p.id for p in pcs.fuera_de_servicio], pcs.total) == (["APOLO-PC01"], ["APOLO-PC02"], 2)
+    assert servicio_reservas.pcs_de_la_sala("COSMOS").total == 0  # sala sin PCs
+
+    futura = servicio_reservas.crear_reserva("APOLO", "Ruiz", MANANA, MANANA + timedelta(hours=2), 20)
+    servicio_reservas.crear_reserva("COSMOS", "Ana", MANANA, MANANA + timedelta(hours=1), 5)
+    assert [r.id for r, _e, _p in servicio_reservas.prestamos_de_salas()] == [futura.id]  # solo salas con PCs
+
+    ahora = datetime.now()
+    with db.obtener_sesion(base) as sesion:
+        en_curso = Reserva(espacio_id="APOLO", solicitante="Clase en curso", inicio=ahora - timedelta(minutes=30),
+                           fin=ahora + timedelta(minutes=30), asistentes=10)
+        sesion.add(en_curso)
+        sesion.commit()
+        sesion.refresh(en_curso)
+    en_uso = servicio_reservas.pcs_en_uso()
+    assert list(en_uso) == ["APOLO-PC01"] and en_uso["APOLO-PC01"].id == en_curso.id  # el PC dañado no se presta

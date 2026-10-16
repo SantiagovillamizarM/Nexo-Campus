@@ -4,12 +4,26 @@ Cada operación busca los datos con el repositorio, aplica todas las reglas de r
 y solo entonces guarda. Si algo no se cumple, lanza ReglaNegocioError y no se guarda nada.
 """
 
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from nexo_campus.errors import ReglaNegocioError
-from nexo_campus.models import Espacio, EstadoReserva, Reserva
+from nexo_campus.models import Espacio, EstadoRecurso, EstadoReserva, Recurso, Reserva
+from nexo_campus.repositories import catalogo as repositorio_catalogo
 from nexo_campus.repositories import reservas as repositorio
 from nexo_campus.rules import reservas as reglas
+
+
+@dataclass
+class PcsDeSala:
+    """Los PCs de una sala de cómputo: se prestan todos juntos al reservar la sala."""
+
+    operativos: list[Recurso] = field(default_factory=list)
+    fuera_de_servicio: list[Recurso] = field(default_factory=list)  # dañados, en mantenimiento o inhabilitados
+
+    @property
+    def total(self) -> int:
+        return len(self.operativos) + len(self.fuera_de_servicio)
 
 
 def _obtener_espacio(espacio_id: str) -> Espacio:
@@ -92,3 +106,42 @@ def modificar_reserva(
 def cancelar_reserva(reserva_id: int) -> Reserva:
     _obtener_reserva_activa(reserva_id)
     return repositorio.cancelar_reserva(reserva_id)
+
+
+# --- PCs de las salas de cómputo -----------------------------------------------------------------
+# Los PCs de torre no se prestan sueltos: reservar una sala de cómputo es el préstamo de todos sus PCs
+# durante la franja de la reserva.
+
+
+def pcs_de_la_sala(espacio_id: str) -> PcsDeSala:
+    espacio = repositorio.obtener_espacio(espacio_id)
+    if espacio is None:
+        return PcsDeSala()
+    pcs = PcsDeSala()
+    for recurso in repositorio_catalogo.recursos_en_espacio(espacio):
+        (pcs.operativos if recurso.estado is EstadoRecurso.disponible else pcs.fuera_de_servicio).append(recurso)
+    return pcs
+
+
+def prestamos_de_salas(desde: datetime | None = None) -> list[tuple[Reserva, Espacio, PcsDeSala]]:
+    """Reservas activas (en curso o futuras) de salas con PCs: cada una presta los PCs de su sala."""
+    desde = desde or datetime.now()
+    resultado = []
+    for reserva in repositorio.listar_reservas(desde=desde):
+        if reserva.estado is not EstadoReserva.activa:
+            continue
+        pcs = pcs_de_la_sala(reserva.espacio_id)
+        if pcs.total:
+            resultado.append((reserva, repositorio.obtener_espacio(reserva.espacio_id), pcs))
+    return resultado
+
+
+def pcs_en_uso(ahora: datetime | None = None) -> dict[str, Reserva]:
+    """PCs que están prestados en este momento porque su sala tiene una reserva en curso."""
+    ahora = ahora or datetime.now()
+    en_uso = {}
+    for reserva, _espacio, pcs in prestamos_de_salas(desde=ahora):
+        if reserva.inicio <= ahora < reserva.fin:
+            for pc in pcs.operativos:
+                en_uso[pc.id] = reserva
+    return en_uso

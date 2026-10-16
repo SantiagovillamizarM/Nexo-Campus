@@ -11,7 +11,7 @@ from nexo_campus.models import EstadoRecurso, Recurso
 
 MAX_PRESTAMOS_ACTIVOS = 2  # préstamos simultáneos por persona
 DIAS_MAXIMOS_PRESTAMO = 7
-TIPOS_NO_PRESTABLES = {"pc_torre"}  # equipos fijos de una sala: se usan reservando la sala
+TIPOS_NO_PRESTABLES = {"pc_torre"}  # no se prestan sueltos: se prestan junto con su sala al reservarla
 ESTADOS_PRESTABLES = {EstadoRecurso.disponible}
 ESTADOS_DEVOLUCION = (EstadoRecurso.disponible, EstadoRecurso.danado)
 
@@ -19,8 +19,10 @@ ESTADOS_DEVOLUCION = (EstadoRecurso.disponible, EstadoRecurso.danado)
 def validar_recurso_prestable(recurso: Recurso) -> None:
     """Regla 4: solo se presta un equipo disponible y de un tipo que se pueda llevar."""
     if recurso.tipo in TIPOS_NO_PRESTABLES:
+        sala = f"la sala {recurso.ubicacion}" if recurso.ubicacion else "su sala"
         raise ReglaNegocioError(
-            f"{recurso.nombre} ({recurso.id}) es un equipo fijo de su sala: para usarlo, reserva la sala."
+            f"{recurso.nombre} ({recurso.id}) no se presta por separado: se presta junto con todos los PCs "
+            f"de {sala} al reservarla en Espacios."
         )
     if recurso.estado not in ESTADOS_PRESTABLES:
         raise ReglaNegocioError(
