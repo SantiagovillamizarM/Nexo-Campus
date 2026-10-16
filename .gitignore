@@ -1,0 +1,29 @@
+# Variables de entorno y credenciales (NUNCA subir)
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# Entorno virtual
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Base de datos local (se regenera con el script de carga)
+*.db
+*.sqlite
+*.sqlite3
+
+# Editores y sistema operativo
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
