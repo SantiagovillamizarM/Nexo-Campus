@@ -105,22 +105,55 @@ Nexo-Campus/
 
 ## 5. Instalación y ejecución
 
-```powershell
-# 1. Crear y activar el entorno virtual
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1        # Windows (PowerShell)
-# source .venv/bin/activate         # Linux / macOS
+### Qué está en el repo y qué instala cada uno
 
-# 2. Instalar dependencias
+El repositorio solo guarda **código y recetas**. Lo pesado o personal lo instala cada integrante en su máquina:
+
+| Va en el repo | Lo instala cada uno en local (NO se sube) |
+|---|---|
+| `requirements.txt` (lista de librerías con versión fija) | `.venv/` con las librerías ya instaladas |
+| `.env.example` (plantilla sin secretos) | `.env` con los valores reales |
+| `nexo_campus/ai/cliente.py` (cliente de IA) | Ollama y el modelo `llama3.2:3b` (~2 GB) |
+| Script de carga en `scripts/` | El archivo `.db` (se regenera con el script) |
+
+### Pasos (una sola vez por máquina)
+
+```powershell
+# 1. Python 3.12 (si no lo tienes)
+winget install -e --id Python.Python.3.12
+
+# 2. Ollama: el servidor de IA local
+winget install -e --id Ollama.Ollama
+#    Linux / macOS: https://ollama.com/download
+
+# 3. Descargar el modelo del proyecto (~2 GB)
+ollama pull llama3.2:3b
+
+# 4. Crear y activar el entorno virtual con Python 3.12
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1        # Windows (PowerShell)
+# python3.12 -m venv .venv && source .venv/bin/activate   # Linux / macOS
+
+# 5. Instalar dependencias
 pip install -r requirements.txt
 
-# 3. Crear el .env a partir de la plantilla y completarlo
+# 6. Crear el .env a partir de la plantilla y completarlo
 copy .env.example .env              # Windows
 # cp .env.example .env              # Linux / macOS
+#    AI_API_KEY=ollama
+#    AI_MODEL=llama3.2:3b
+```
 
-# 4. Ejecutar la aplicación
+### Ejecutar
+
+```powershell
+.\.venv\Scripts\Activate.ps1
 streamlit run app.py
 ```
+
+Ollama queda corriendo en segundo plano al encender el equipo. Para comprobarlo, abre `http://localhost:11434` en el navegador: debe decir `Ollama is running`. Si no, ejecuta `ollama serve`.
+
+> **Ojo con `httpx`:** `openai==1.51.2` falla con `httpx` 0.28 o superior (`unexpected keyword argument 'proxies'`). Por eso `requirements.txt` fija `httpx==0.27.2`. No lo quites.
 
 ---
 
@@ -175,6 +208,37 @@ Reglas previstas:
 
 ## 8. Uso de la IA
 
+### Cómo funciona la conexión
+
+Ollama es un programa que corre el modelo **en tu propia máquina** y abre una API en `http://localhost:11434/v1`. Esa API imita la de OpenAI, por eso usamos la librería `openai` para hablar con ella. No hay que pagar ni crear cuenta, y no sale nada a internet.
+
+```
+nexo_campus/ai/cliente.py ──HTTP──▶ Ollama (localhost:11434) ──▶ modelo llama3.2:3b
+```
+
+- `AI_API_KEY=ollama` **no es una clave real**: Ollama no pide clave, pero la librería `openai` exige un valor no vacío.
+- Si el jurado autoriza otra API compatible con OpenAI, solo se cambian `AI_BASE_URL`, `AI_API_KEY` y `AI_MODEL` en el `.env`. El código no cambia. Esa clave sí sería real y **nunca** se sube.
+
+### Cliente disponible (`nexo_campus/ai/cliente.py`)
+
+| Función | Devuelve |
+|---|---|
+| `consultar_texto(mensaje, instrucciones="")` | Texto libre |
+| `consultar_json(mensaje, instrucciones, ModeloPydantic)` | Una instancia del modelo Pydantic, ya validada |
+
+```python
+from pydantic import BaseModel
+from nexo_campus.ai.cliente import consultar_json
+
+class Triaje(BaseModel):
+    categoria: str
+    prioridad: str
+
+triaje = consultar_json(texto_usuario, "Responde solo JSON con 'categoria' y 'prioridad'.", Triaje)
+```
+
+Cualquier fallo (Ollama apagado, tiempo de espera, error del servidor, JSON inválido) se convierte en `IAError` con un mensaje entendible. El servicio la deja pasar y la UI la muestra con `st.error(...)`.
+
 ### Para qué se usa
 - **Triaje de incidencias:** a partir del texto libre, la IA devuelve categoría, prioridad, área responsable y justificación.
 - **Recomendaciones:** cuando una reserva se rechaza o un espacio se inhabilita, la IA sugiere alternativas.
@@ -186,6 +250,7 @@ Reglas previstas:
 4. **Si la IA falla** (caída, tiempo de espera, JSON inválido), se muestra un error claro y el usuario puede clasificar a mano. Ese registro queda marcado como `origen = "manual"`, nunca como si lo hubiera hecho la IA.
 5. Toda llamada a la IA va dentro de `st.spinner("Analizando con IA...")` en la UI.
 6. El cliente de IA usa `config.AI_BASE_URL`, `config.AI_API_KEY`, `config.AI_MODEL` y `config.AI_TIMEOUT`.
+7. Nadie crea otro cliente de `openai` por su cuenta: todas las llamadas pasan por `nexo_campus/ai/cliente.py`.
 
 ---
 
