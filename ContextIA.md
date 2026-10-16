@@ -71,6 +71,8 @@ No agregues librerías nuevas sin avisar al equipo. Si alguna es necesaria, se a
 | `nexo_campus/models/` | Definición de tablas y entidades (SQLModel) | Lógica |
 | `nexo_campus/ai/` | Cliente de IA, prompts, validación de la respuesta | Decisiones finales sin validar |
 | `nexo_campus/config.py` | Única fuente de configuración (lee el `.env`) | — |
+| `nexo_campus/db.py` | Conexión a SQLite y sesiones (`obtener_sesion()`) | Consultas de negocio |
+| `nexo_campus/carga/` | Lectura, limpieza y validación de los datos oficiales | Reglas de operación del día a día |
 | `scripts/` | Script de carga de los datos oficiales a SQLite | — |
 | `tests/` | Pruebas de reglas con casos válidos e inválidos | — |
 | `data/raw/` | Datos oficiales entregados por Campuslands (sin modificar) | — |
@@ -87,6 +89,8 @@ Nexo-Campus/
 ├── nexo_campus/
 │   ├── config.py           # Variables del .env
 │   ├── errors.py           # Excepciones propias (ReglaNegocioError, IAError...)
+│   ├── db.py               # Conexión a SQLite y sesiones
+│   ├── carga/              # Carga de datos oficiales (esquema.py = columnas esperadas)
 │   ├── models/             # Entidades SQLModel
 │   ├── repositories/       # Acceso a datos
 │   ├── rules/              # Reglas de negocio (una por función)
@@ -329,6 +333,46 @@ Cualquier fallo (Ollama apagado, tiempo de espera, error del servidor, JSON inv�
 - El script de `scripts/` los carga en SQLite, y los registros inconsistentes (vacíos, duplicados, fechas inválidas, referencias rotas) **se reportan, no se descartan en silencio**.
 - La base de datos `.db` no se sube al repo: se regenera con el script de carga.
 - Solo se usan datos ficticios o autorizados del reto.
+
+### Cargar los datos
+
+```bash
+python scripts/cargar_datos.py              # primera carga
+python scripts/cargar_datos.py --reiniciar  # borra la base y carga desde cero
+```
+
+Sin `--reiniciar`, el script se niega a sobrescribir una base que ya tiene datos, para no perder lo hecho desde la app.
+
+### Archivos esperados en `data/raw/`
+
+`espacios`, `recursos`, `reservas`, `prestamos` e `incidencias`, cada uno en `.csv` (separado por coma o punto y coma), `.xlsx`/`.xls` o `.json`. Si las columnas se llaman distinto, **no se toca el código de carga**: se agrega el nombre a la lista de alias en `nexo_campus/carga/esquema.py`. Lo mismo para estados escritos de otra forma (ej. `"Fuera de servicio"` → `inhabilitado`).
+
+### Qué revisa la carga
+
+| Revisión | Resultado |
+|---|---|
+| Campo obligatorio vacío, número o fecha inválidos, estado desconocido | Rechazado |
+| Fila idéntica repetida o ID duplicado | Rechazado (se queda el primero) |
+| ID huérfano (reserva, préstamo o incidencia que apunta a algo que no existe) | Rechazado |
+| Reserva con fin antes del inicio, más asistentes que aforo o solapada con otra activa | Rechazado |
+| Préstamo con fechas incoherentes o segundo préstamo activo del mismo equipo | Rechazado |
+| Estado vacío | Cargado con valor por defecto + advertencia |
+| Equipo `disponible` con préstamo activo, o `prestado` sin préstamo | Estado corregido + advertencia |
+
+Todo queda en la tabla `RegistroInconsistente` (archivo, fila, ID, motivo, tipo). La UI lo consulta con `nexo_campus/repositories/catalogo.py` → `listar_inconsistencias()`, junto con `listar_espacios()`, `listar_recursos()` y `listar_incidencias()`.
+
+### Usar la base desde el código
+
+```python
+from sqlmodel import select
+from nexo_campus.db import obtener_sesion
+from nexo_campus.models import Espacio, EstadoEspacio
+
+with obtener_sesion() as sesion:
+    disponibles = sesion.exec(select(Espacio).where(Espacio.estado == EstadoEspacio.disponible)).all()
+```
+
+Esto va en `repositories/`, nunca en la UI.
 
 ---
 
