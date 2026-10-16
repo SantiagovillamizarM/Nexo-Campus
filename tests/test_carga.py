@@ -16,7 +16,9 @@ from nexo_campus.models import (
     EstadoEspacio,
     EstadoPrestamo,
     EstadoRecurso,
+    HistorialEstadoRecurso,
     Incidencia,
+    OrigenCambioEstado,
     OrigenClasificacion,
     Prestamo,
     Recurso,
@@ -158,6 +160,19 @@ def test_prestamos_y_conciliacion_de_estado_de_recursos(motor, datos):
     assert recursos["PC-02"].estado is EstadoRecurso.disponible  # decía prestado sin préstamo
     assert recursos["PR-01"].estado is EstadoRecurso.danado
     assert p5.estado is EstadoPrestamo.devuelto  # deducido por la fecha de devolución
+
+
+def test_correcciones_de_estado_quedan_en_el_historial(motor, datos):
+    cargar_datos(motor, datos)
+    with db.obtener_sesion(motor) as sesion:
+        historial = {h.recurso_id: h for h in sesion.exec(select(HistorialEstadoRecurso))}
+
+    assert set(historial) == {"PC-01", "PC-02"}  # PR-01 no cambia de estado
+    assert (historial["PC-01"].estado_anterior, historial["PC-01"].estado_nuevo) == (
+        EstadoRecurso.disponible, EstadoRecurso.prestado,
+    )
+    assert historial["PC-02"].estado_nuevo is EstadoRecurso.disponible
+    assert all(h.origen is OrigenCambioEstado.carga and h.motivo for h in historial.values())
 
 
 def test_incidencias(motor, datos):

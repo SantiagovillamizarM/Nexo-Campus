@@ -34,7 +34,9 @@ from nexo_campus.models import (
     EstadoPrestamo,
     EstadoRecurso,
     EstadoReserva,
+    HistorialEstadoRecurso,
     Incidencia,
+    OrigenCambioEstado,
     OrigenClasificacion,
     Prestamo,
     Prioridad,
@@ -85,6 +87,7 @@ class _Contexto:
     filas_reservas: dict[int, int] = field(default_factory=dict)  # id(reserva) -> fila del archivo
     prestamos_activos: dict[str, int] = field(default_factory=dict)
     inconsistencias: list[RegistroInconsistente] = field(default_factory=list)
+    historial: list[HistorialEstadoRecurso] = field(default_factory=list)
 
     def registrar(
         self,
@@ -345,18 +348,27 @@ def _cargar_entidad(entidad: str, directorio: Path, ctx: _Contexto) -> tuple[Res
 
 
 def _conciliar_estados_recursos(ctx: _Contexto, resumen: ResumenEntidad) -> None:
-    """El estado de cada equipo debe coincidir con sus préstamos activos."""
+    """El estado de cada equipo debe coincidir con sus préstamos activos. Cada corrección queda en el historial."""
     for recurso_id, recurso in ctx.recursos.items():
         prestado = recurso_id in ctx.prestamos_activos
         motivo = None
+        nuevo_estado = None
         if prestado and recurso.estado is EstadoRecurso.disponible:
-            recurso.estado = EstadoRecurso.prestado
+            nuevo_estado = EstadoRecurso.prestado
             motivo = "Figuraba 'disponible' pero tiene un préstamo activo; se cambió a 'prestado'"
         elif prestado and recurso.estado is not EstadoRecurso.prestado:
             motivo = f"Tiene un préstamo activo pero su estado es '{recurso.estado.value}'"
         elif not prestado and recurso.estado is EstadoRecurso.prestado:
-            recurso.estado = EstadoRecurso.disponible
+            nuevo_estado = EstadoRecurso.disponible
             motivo = "Figuraba 'prestado' sin ningún préstamo activo; se cambió a 'disponible'"
+        if nuevo_estado is not None:
+            ctx.historial.append(
+                HistorialEstadoRecurso(
+                    recurso_id=recurso_id, estado_anterior=recurso.estado, estado_nuevo=nuevo_estado,
+                    motivo=motivo, origen=OrigenCambioEstado.carga,
+                )
+            )
+            recurso.estado = nuevo_estado
         if motivo:
             ctx.registrar(
                 "recursos", resumen.archivo, ctx.filas_recursos.get(recurso_id), recurso_id,
@@ -398,6 +410,7 @@ def cargar_datos(
             sesion.add_all(objetos)
             sesion.flush()  # inserta en orden para que las claves foráneas ya existan
         _conciliar_estados_recursos(ctx, next(r for r in resumen if r.entidad == "recursos"))
+        sesion.add_all(ctx.historial)
         sesion.add_all(ctx.inconsistencias)
         sesion.commit()
 

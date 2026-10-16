@@ -52,6 +52,15 @@ class OrigenClasificacion(str, Enum):
     datos_origen = "datos_origen"
 
 
+class OrigenCambioEstado(str, Enum):
+    """Qué provocó un cambio de estado de un recurso (queda en el historial)."""
+
+    carga = "carga"
+    prestamo = "prestamo"
+    devolucion = "devolucion"
+    incidencia = "incidencia"
+
+
 class TipoInconsistencia(str, Enum):
     rechazado = "rechazado"  # el registro NO se cargó
     advertencia = "advertencia"  # se cargó, pero con un dato corregido o dudoso
