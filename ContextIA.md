@@ -118,40 +118,109 @@ El repositorio solo guarda **código y recetas**. Lo pesado o personal lo instal
 
 ### Pasos (una sola vez por máquina)
 
+Todos los comandos se ejecutan en la carpeta raíz del proyecto. Sigue solo el bloque de tu sistema operativo.
+
+#### Windows (PowerShell)
+
 ```powershell
 # 1. Python 3.12 (si no lo tienes)
 winget install -e --id Python.Python.3.12
 
-# 2. Ollama: el servidor de IA local
+# 2. Ollama: el servidor de IA local (arranca solo al iniciar sesión)
 winget install -e --id Ollama.Ollama
-#    Linux / macOS: https://ollama.com/download
+
+# 3. Descargar el modelo del proyecto (~2 GB). Abre una terminal nueva si no reconoce "ollama"
+ollama pull llama3.2:3b
+
+# 4. Crear y activar el entorno virtual con Python 3.12
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+#    Si PowerShell bloquea el script: Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+
+# 5. Instalar dependencias
+pip install -r requirements.txt
+
+# 6. Crear el .env y completar AI_API_KEY=ollama y AI_MODEL=llama3.2:3b
+copy .env.example .env
+```
+
+#### macOS (Terminal, requiere [Homebrew](https://brew.sh))
+
+```bash
+# 1. Python 3.12
+brew install python@3.12
+
+# 2. Ollama y arrancarlo como servicio (queda activo al reiniciar)
+brew install ollama
+brew services start ollama
+#    Alternativa: descargar la app desde https://ollama.com/download y abrirla
 
 # 3. Descargar el modelo del proyecto (~2 GB)
 ollama pull llama3.2:3b
 
 # 4. Crear y activar el entorno virtual con Python 3.12
-py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1        # Windows (PowerShell)
-# python3.12 -m venv .venv && source .venv/bin/activate   # Linux / macOS
+python3.12 -m venv .venv
+source .venv/bin/activate
 
 # 5. Instalar dependencias
 pip install -r requirements.txt
 
-# 6. Crear el .env a partir de la plantilla y completarlo
-copy .env.example .env              # Windows
-# cp .env.example .env              # Linux / macOS
-#    AI_API_KEY=ollama
-#    AI_MODEL=llama3.2:3b
+# 6. Crear el .env y completar AI_API_KEY=ollama y AI_MODEL=llama3.2:3b
+cp .env.example .env
+```
+
+#### Linux (Ubuntu / Debian)
+
+```bash
+# 1. Python 3.12 (Ubuntu 24.04 ya lo trae en sus repositorios)
+sudo apt update
+sudo apt install python3.12 python3.12-venv
+#    Ubuntu 22.04 o anterior: primero agregar el repositorio deadsnakes
+#    sudo add-apt-repository ppa:deadsnakes/ppa && sudo apt update
+#    Fedora: sudo dnf install python3.12
+
+# 2. Ollama (el instalador oficial lo deja como servicio que arranca solo; pide sudo)
+curl -fsSL https://ollama.com/install.sh | sh
+
+# 3. Descargar el modelo del proyecto (~2 GB)
+ollama pull llama3.2:3b
+
+# 4. Crear y activar el entorno virtual con Python 3.12
+python3.12 -m venv .venv
+source .venv/bin/activate
+
+# 5. Instalar dependencias
+pip install -r requirements.txt
+
+# 6. Crear el .env y completar AI_API_KEY=ollama y AI_MODEL=llama3.2:3b
+cp .env.example .env
 ```
 
 ### Ejecutar
 
 ```powershell
+# Windows
 .\.venv\Scripts\Activate.ps1
 streamlit run app.py
 ```
 
-Ollama queda corriendo en segundo plano al encender el equipo. Para comprobarlo, abre `http://localhost:11434` en el navegador: debe decir `Ollama is running`. Si no, ejecuta `ollama serve`.
+```bash
+# macOS / Linux
+source .venv/bin/activate
+streamlit run app.py
+```
+
+### Comprobar que Ollama está corriendo
+
+Abre `http://localhost:11434` en el navegador: debe decir `Ollama is running`. Si no:
+
+| Sistema | Cómo arrancarlo |
+|---|---|
+| Windows | Abrir la app Ollama desde el menú Inicio, o `ollama serve` |
+| macOS | `brew services start ollama`, o abrir la app Ollama |
+| Linux | `sudo systemctl start ollama`, o `ollama serve` |
+
+> Las instrucciones de Windows están probadas. Las de macOS y Linux siguen la documentación oficial, pero no se han probado en este equipo: si algo falla, avísale al equipo para corregir esta sección.
 
 > **Ojo con `httpx`:** `openai==1.51.2` falla con `httpx` 0.28 o superior (`unexpected keyword argument 'proxies'`). Por eso `requirements.txt` fija `httpx==0.27.2`. No lo quites.
 
