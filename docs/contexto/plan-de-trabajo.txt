@@ -1,0 +1,91 @@
+Plan de trabajo: CampusOps (5 horas, 4 personas, 5 avances)
+Decisión de arquitectura
+Un ajuste a lo que propuse antes: para ganar tiempo, Streamlit llama directamente a una capa de servicios en Python, sin FastAPI. La arquitectura sigue teniendo capas claras, y eso ayuda en la defensa:
+
+
+UI (Streamlit) → Servicios (reglas de negocio) → Repositorios (SQLite)
+                         ↓
+                  Cliente IA (Ollama / API autorizada)
+Si al final sobra tiempo, se puede exponer FastAPI encima de los mismos servicios sin cambiar nada más.
+
+Roles fijos (cada persona es dueña de su parte durante todo el evento)
+Persona	Rol	Responsable de
+P1	Datos y persistencia	Carga de los datos oficiales, limpieza, modelos, SQLite, integridad
+P2	Reglas de negocio	Servicios de espacios y préstamos, validaciones, mensajes de error
+P3	IA	Cliente de IA, prompts, validación de respuestas, triaje y recomendaciones
+P4	Interfaz y entrega	Streamlit, estados de carga/éxito/error, README, guion de la demo
+Cada uno hace commits de su parte; así el historial de Git muestra que trabajó todo el equipo.
+
+Avance 1: Base del proyecto y carga de datos (0:00 – 0:45)
+Objetivo: que los datos oficiales queden cargados, limpios y guardados.
+
+Persona	Tareas
+P1	Analizar los datos entregados, definir los modelos (Espacio, Recurso, Reserva, Préstamo, Incidencia), escribir el script de carga a SQLite que detecte registros inconsistentes (nulos, duplicados, fechas inválidas, IDs huérfanos)
+P2	Crear el repositorio, la estructura de carpetas, requirements.txt, .env.example, .gitignore (con .env incluido desde el primer commit)
+P3	Montar y probar el modelo de IA autorizado (Ollama o la API de la jornada) y crear el cliente básico con lectura de .env
+P4	Esqueleto de Streamlit con navegación: Inicio, Espacios, Recursos, Incidencias
+Al terminar, el programa:
+
+Carga los datos oficiales en SQLite.
+Muestra tablas de espacios, recursos e incidencias existentes.
+Muestra un reporte de registros inconsistentes (cuántos, cuáles y por qué), lo que es evidencia directa para el criterio de datos.
+Avance 2: Módulo 1, espacios y reservas (0:45 – 1:45)
+Objetivo: reservar aulas y cubículos sin conflictos.
+
+Persona	Tareas
+P1	Repositorio de reservas, consultas de disponibilidad por franja horaria
+P2	Regla 1: sin solapamiento de horarios en el mismo espacio. Regla 2: asistentes ≤ aforo. Regla 3: no reservar espacios inhabilitados o en mantenimiento
+P3	Diseñar el prompt de triaje y el esquema JSON de respuesta (categoría, prioridad, área responsable, justificación) con validación Pydantic
+P4	Pantalla de reservas: formulario, vista de disponibilidad, mensajes claros de éxito y de rechazo
+Al terminar, el programa:
+
+Permite crear, modificar y cancelar reservas.
+Rechaza solapamientos, exceso de aforo y espacios inhabilitados, y explica el motivo.
+Muestra la disponibilidad de cada espacio.
+Avance 3: Módulo 2, préstamo de recursos (1:45 – 2:45)
+Objetivo: prestar equipos con trazabilidad de estado.
+
+Persona	Tareas
+P1	Historial de cambios de estado de cada equipo (trazabilidad)
+P2	Regla 4: no prestar un equipo ya prestado, en mantenimiento o dañado. Regla 5: límite de préstamos activos por persona. Flujo de devolución (disponible o dañado)
+P3	Servicio de triaje terminado: recibe el texto de una incidencia y devuelve la clasificación validada. Si la IA falla o responde mal, muestra un error claro y permite clasificar a mano marcando el caso como "manual" (nunca una respuesta inventada, eso cuesta −15)
+P4	Pantalla de préstamos y devoluciones, historial por equipo, indicadores de estado
+Al terminar, el programa:
+
+Gestiona préstamos y devoluciones con estados consistentes.
+Muestra el historial completo de cada equipo.
+Ya tiene 5 reglas de negocio (el mínimo son 3; las demás dan margen si alguna falla en la demo).
+Avance 4: Módulo 3, incidencias con IA e integración (2:45 – 3:45)
+Objetivo: el flujo vertical completo con IA, que es lo que más puntos da.
+
+Persona	Tareas
+P1	Guardar las incidencias junto con la salida de la IA (texto original, clasificación, si fue IA o manual)
+P2	Regla central unificada: una incidencia de prioridad alta sobre un espacio o equipo lo inhabilita automáticamente, y así queda bloqueado en reservas y préstamos. Al cerrarse la incidencia, se vuelve a habilitar
+P3	IA de recomendación: cuando una reserva se rechaza o un espacio queda inhabilitado, la IA sugiere alternativas con espacios que existen de verdad y están disponibles (se validan contra la BD antes de mostrarlas)
+P4	Pantalla de incidencias: reportar → indicador "analizando con IA..." → resultado → el usuario confirma o corrige → se enruta. Panel con incidencias por prioridad
+Al terminar, el programa (MVP completo):
+
+Recibe una incidencia en lenguaje natural, la IA la clasifica, prioriza y enruta, y el usuario la confirma.
+La incidencia afecta automáticamente la disponibilidad de espacios y recursos.
+La IA recomienda alternativas reales cuando hay un conflicto.
+Los tres módulos funcionan como un solo flujo.
+Avance 5: Pulido, pruebas y preparación de la defensa (3:45 – 4:40)
+Objetivo: que nada falle en la demo y que todos puedan defender el código.
+
+Persona	Tareas
+P1	Probar la carga desde cero (BD vacía) para garantizar que la instalación es reproducible
+P2	Pruebas con casos válidos e inválidos de cada regla (pytest o un guion manual). Dejar cada regla en una función aislada y con constantes fáciles de cambiar (por ejemplo MAX_PRESTAMOS = 2) para la modificación en vivo
+P3	Manejo de tiempos de espera y errores de la IA, y revisar que no haya claves de API en el código ni en el historial
+P4	README completo (problema, integrantes, stack, rol de la IA, reglas, instalación), guion de la demo y diagrama de arquitectura
+Al terminar, el programa:
+
+Se instala con pip install -r requirements.txt y se ejecuta con un solo comando.
+Tiene estados de carga, éxito y error en todas las pantallas.
+Está listo para la demo: cada regla tiene un caso válido y uno inválido preparados.
+4:40 – 5:00: congelar el código. Solo se permiten correcciones críticas. Ensayar el pitch y que cada integrante practique cambiar una regla en menos de 3 minutos.
+
+Reglas para no perder puntos
+Desde el minuto 1: .env en .gitignore. Una clave subida cuesta −10, aunque se borre después.
+Nada de IA simulada: si la IA falla, se muestra el error, no una respuesta fija (−15).
+Commits pequeños y frecuentes de las 4 personas, con mensajes claros.
+Si el tiempo se acaba, se recorta pulido de interfaz, nunca el flujo de IA ni las reglas: son 45 de los 70 puntos técnicos.
