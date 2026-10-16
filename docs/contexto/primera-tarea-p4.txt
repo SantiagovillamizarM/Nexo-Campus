@@ -1,0 +1,198 @@
+Actúa como desarrollador de Python y Streamlit y ayúdame a implementar únicamente la primera tarea que me asignaron en una hackatón. Trabaja sobre el repositorio real y explícame lo necesario con palabras sencillas, porque soy principiante.
+
+## 1. Contexto del proyecto
+
+El proyecto se llama CampusOps y corresponde al desafío “El campus bajo presión” de Campuslands.
+
+El equipo tiene cuatro personas y cinco horas para construir un MVP funcional que integre:
+
+- Gestión de espacios y reservas.
+- Préstamo y devolución de recursos tecnológicos.
+- Gestión de incidencias con ayuda de IA.
+
+La arquitectura acordada es:
+
+UI con Streamlit → Servicios de Python → Repositorios con SQLite.
+
+Los servicios también podrán utilizar un cliente de IA, mediante Ollama o una API autorizada para la jornada. La opción concreta depende de lo que confirme el equipo.
+
+Streamlit llamará directamente a los servicios de Python. No se utilizará FastAPI en esta primera implementación.
+
+## 2. Mi rol y el de mis compañeros
+
+Soy P4: responsable de interfaz y entrega.
+
+El reparto es:
+
+- P1: datos, modelos, carga y limpieza de información, SQLite y persistencia.
+- P2: estructura inicial del repositorio y servicios con las reglas de negocio.
+- P3: cliente de IA, prompts y validación de sus respuestas.
+- P4 —yo—: pantallas de Streamlit, conexión de la interfaz con los servicios, mensajes de carga/éxito/error y, posteriormente, README y guion de demostración.
+
+Mi responsabilidad general incluye crear la interfaz, conectar sus controles con las funciones reales de mis compañeros y comprobar su funcionamiento desde las pantallas.
+
+Sin embargo, esta solicitud se limita al primer paso.
+
+## 3. Primera tarea exacta asignada
+
+En la imagen del reparto de tareas, mi primera tarea dice:
+
+“Clonar el repo y armar el esqueleto de Streamlit con las 4 pestañas vacías”.
+
+La justificación dice:
+
+“Necesita el repo, pero no los datos todavía”.
+
+Antes de mi trabajo, P2 debe crear y subir el repositorio con:
+
+- Estructura de carpetas.
+- `.gitignore`, incluyendo `.env`.
+- `.env.example`.
+- `requirements.txt`.
+- Primer commit.
+
+Por lo tanto, primero debes revisar lo que realmente haya creado P2 y adaptar mi interfaz a esa estructura.
+
+## 4. Qué debes implementar ahora
+
+Construye una aplicación inicial de Streamlit con cuatro pestañas:
+
+1. Inicio.
+2. Espacios.
+3. Recursos.
+4. Incidencias.
+
+Cada pestaña solo necesita:
+
+- Un título claro.
+- Un texto breve que indique qué se mostrará allí más adelante.
+
+Por ejemplo, en Espacios puede aparecer “Aquí se mostrarán los espacios y las reservas”.
+
+Las pestañas deben poder abrirse y la aplicación debe ejecutarse sin depender de una base de datos, un modelo de IA ni servicios todavía no disponibles.
+
+Puedes mostrar el nombre CampusOps como título principal.
+
+En esta etapa, “pestañas vacías” significa que todavía no tienen operaciones reales. Los títulos y mensajes informativos son suficientes.
+
+## 5. Python y Streamlit
+
+Utiliza Python y Streamlit para crear la interfaz.
+
+Ten presente que:
+
+- Python es el lenguaje de programación.
+- Streamlit es una biblioteca/framework de Python para crear interfaces web.
+- El código se escribe en archivos `.py`.
+- La aplicación se ejecuta con Streamlit y se visualiza en el navegador.
+- Streamlit proporciona títulos, pestañas, botones, formularios y tablas.
+- Para este esqueleto basta con sus componentes nativos.
+
+No hace falta añadir HTML, CSS, JavaScript, React ni herramientas adicionales para completar esta tarea.
+
+La apariencia inicial debe ser sencilla, legible y ordenada. No hay un diseño de Figma definitivo seleccionado: anteriormente solo se consultaron referencias. No inventes que existe un diseño aprobado.
+
+## 6. Revisa el proyecto antes de modificarlo
+
+Antes de escribir código:
+
+1. Comprueba si ya estás dentro del repositorio.
+2. Lee las instrucciones del proyecto, como README y AGENTS.md, si existen.
+3. Revisa la estructura, las dependencias y si ya existe un punto de entrada de Streamlit.
+4. Comprueba el estado de Git para no sobrescribir cambios de mis compañeros.
+5. Identifica el entorno de Python disponible y las instrucciones reales de instalación.
+
+Si el repositorio ya está clonado, no vuelvas a clonarlo.
+
+Si falta el enlace para clonarlo, pídemelo. No inventes una URL.
+
+No asumas el sistema operativo, la rama de trabajo, la versión de Python, las rutas ni los nombres de archivos del equipo: compruébalos cuando sea posible.
+
+Si ya existe un archivo de entrada de la interfaz, utilízalo. Si no existe, crea uno en una ubicación coherente con la estructura del proyecto. `app.py` es una posibilidad, no una ruta previamente confirmada.
+
+## 7. Límites de esta primera tarea
+
+Todavía no debes:
+
+- Crear modelos o tablas.
+- Conectar SQLite.
+- Cargar datos oficiales.
+- Inventar datos de ejemplo para aparentar una integración.
+- Crear reservas, préstamos o devoluciones.
+- Implementar reglas de negocio.
+- Conectar o simular IA.
+- Importar funciones o módulos que todavía no existan.
+- Añadir FastAPI.
+- Reorganizar todo el proyecto.
+- Modificar el trabajo de mis compañeros sin una necesidad concreta.
+
+Tampoco debes implementar los requisitos técnicos extraños del último párrafo de la guía original como parte de este esqueleto. Su significado no fue aclarado y no es necesario inventar su funcionamiento para crear cuatro pestañas.
+
+## 8. Dependencias y ejecución
+
+Respeta el mecanismo de dependencias que tenga el proyecto.
+
+Si utiliza `requirements.txt`:
+
+- Comprueba si Streamlit ya está incluido.
+- Si falta, añade la dependencia sin eliminar las demás.
+- No cambies versiones de otras bibliotecas sin necesidad.
+- No inventes una versión obligatoria de Streamlit: sigue las restricciones reales del proyecto.
+
+Utiliza el entorno virtual existente o prepara uno si hace falta siguiendo las instrucciones del repositorio.
+
+Al finalizar, indica el comando exacto de ejecución según la ruta real del archivo. Por ejemplo, si el archivo está en la raíz y se llama `app.py`:
+
+`python -m streamlit run app.py`
+
+Adapta el comando al entorno comprobado.
+
+## 9. README en esta etapa
+
+El README completo es una responsabilidad posterior de mi rol. No escribas como si los módulos, las reglas o la IA ya estuvieran implementados.
+
+En esta primera tarea, si corresponde actualizar el README, añade únicamente instrucciones verificadas para:
+
+- Preparar el entorno.
+- Instalar las dependencias.
+- Ejecutar el esqueleto de Streamlit.
+
+Conserva la documentación existente y deja claro que la interfaz está en su etapa inicial.
+
+## 10. Comprobaciones para dar la tarea por terminada
+
+Comprueba, en la medida que permita el entorno, que:
+
+- La aplicación inicia correctamente.
+- Aparecen las cuatro pestañas con los nombres acordados.
+- Cada pestaña muestra su contenido correspondiente.
+- No hay errores por servicios, datos o credenciales ausentes.
+- No se han añadido dependencias innecesarias.
+- No se han alterado archivos ajenos a esta tarea sin motivo.
+
+Si puedes ejecutar e inspeccionar la interfaz, hazlo. Si no puedes verificarla visualmente, dilo expresamente y dame pasos sencillos para comprobarla yo. No afirmes haber probado algo que no probaste.
+
+## 11. Git y entrega
+
+Revisa los cambios finales y evita incluir `.env`, credenciales, entornos virtuales o archivos temporales.
+
+Propón un mensaje de commit claro, por ejemplo:
+
+`feat: crear esqueleto de interfaz con cuatro pestañas`
+
+Respeta el flujo de ramas y colaboración que tenga el equipo. No asumas una rama ni hagas push sin una instrucción que lo autorice.
+
+## 12. Cómo debes explicarme el resultado
+
+Implementa la tarea y después explícame de forma corta y fácil:
+
+1. Qué archivos creaste o modificaste y dónde están.
+2. Qué hace cada archivo.
+3. Cómo ejecutar la aplicación.
+4. Qué debo ver en el navegador.
+5. Qué comprobaste y qué no pudiste comprobar.
+6. Qué falta para la siguiente etapa.
+
+Explícame los bloques principales del código para que pueda defender mi trabajo. No me des una clase extensa ni añadas funcionalidades fuera del alcance.
+
+Si falta información que realmente impide avanzar, pregunta de forma concreta. Si puedes comprobarla en el repositorio o en el entorno, revísala primero. No inventes datos, conexiones ni funcionalidades.
