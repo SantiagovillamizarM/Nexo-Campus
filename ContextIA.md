@@ -268,14 +268,29 @@ def validar_limite_prestamos(prestamos_activos: int) -> None:
 - El servicio la deja pasar y la UI la muestra con `st.error(...)`.
 - Las reglas son de **dominio**: solapamientos, aforo, estados y límites. Revisar que un campo no esté vacío no cuenta como regla.
 
-Reglas previstas:
+Reglas implementadas (archivo y constante para la modificación en vivo):
 
-1. Una reserva no puede solaparse con otra en el mismo espacio.
-2. El número de asistentes no puede superar el aforo del espacio.
-3. No se reservan espacios inhabilitados o en mantenimiento.
-4. No se presta un equipo ya prestado, en mantenimiento o dañado.
-5. Límite de préstamos activos por persona.
-6. **Regla central:** una incidencia de prioridad alta sobre un espacio o equipo lo inhabilita hasta que se cierre.
+| # | Regla | Archivo | Constantes |
+|---|---|---|---|
+| 1 | Una reserva no se solapa con otra activa del mismo espacio | `rules/reservas.py` | — |
+| 2 | Los asistentes no superan el aforo | `rules/reservas.py` | — |
+| 3 | No se reservan espacios en mantenimiento o inhabilitados | `rules/reservas.py` | `ESTADOS_RESERVABLES` |
+| — | Horario del campus, duración mínima y máxima, nada en el pasado | `rules/reservas.py` | `HORA_APERTURA`, `HORA_CIERRE`, `DURACION_MINIMA_MINUTOS`, `DURACION_MAXIMA_HORAS` |
+| 4 | Solo se presta un equipo disponible y que se pueda llevar (los PC de torre no) | `rules/prestamos.py` | `ESTADOS_PRESTABLES`, `TIPOS_NO_PRESTABLES` |
+| 5 | Límite de préstamos activos por persona y duración máxima | `rules/prestamos.py` | `MAX_PRESTAMOS_ACTIVOS`, `DIAS_MAXIMOS_PRESTAMO` |
+| — | Códigos válidos y únicos; el aforo no baja de una reserva futura; "prestado" no se pone a mano | `rules/catalogo.py` | `PATRON_CODIGO`, `AFORO_MAXIMO` |
+| 6 | **Regla central** (ver abajo) | `rules/central.py` + `services/regla_central.py` | `PRIORIDADES_QUE_BLOQUEAN` |
+
+### Regla central unificada
+
+Una incidencia **alta o crítica** sobre un espacio o equipo lo **inhabilita** al registrarse, así que las reglas 3 y 4 impiden reservarlo o prestarlo. Al **cerrarse**, vuelve al estado que tenía antes (se lee del historial).
+
+- Si quedan otras incidencias graves abiertas sobre lo mismo, sigue bloqueado hasta cerrar la última.
+- Si el espacio ya estaba inhabilitado por otra razón (por ejemplo, desde Administrar), cerrar la incidencia no lo libera.
+- Un equipo **prestado** no se le quita a quien lo tiene: se bloquea cuando se devuelve.
+- Las reservas activas futuras de un espacio bloqueado se avisan en pantalla para reubicarlas; no se cancelan solas.
+- Cada bloqueo y liberación queda en el historial (`HistorialEstadoEspacio` y `HistorialEstadoRecurso`, origen `incidencia`).
+- Se activa desde `services/incidencias.py` (`registrar_incidencia` y `cerrar_incidencia`).
 
 ---
 

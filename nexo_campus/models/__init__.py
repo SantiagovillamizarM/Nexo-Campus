@@ -12,7 +12,7 @@ from nexo_campus.models.enums import (
     TipoInconsistencia,
 )
 from nexo_campus.models.espacio import Espacio
-from nexo_campus.models.historial import HistorialEstadoRecurso
+from nexo_campus.models.historial import HistorialEstadoEspacio, HistorialEstadoRecurso
 from nexo_campus.models.incidencia import Incidencia
 from nexo_campus.models.inconsistencia import RegistroInconsistente
 from nexo_campus.models.prestamo import Prestamo
@@ -26,6 +26,7 @@ __all__ = [
     "EstadoPrestamo",
     "EstadoRecurso",
     "EstadoReserva",
+    "HistorialEstadoEspacio",
     "HistorialEstadoRecurso",
     "Incidencia",
     "OrigenCambioEstado",

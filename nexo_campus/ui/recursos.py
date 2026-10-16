@@ -71,9 +71,24 @@ def _inventario(recursos: list[Recurso]) -> None:
 
 def _acciones_prestamo(recursos: list[Recurso], activos: list[Prestamo]) -> None:
     """Formularios de préstamo y devolución. Llaman a services/prestamos.py (reglas 4 y 5)."""
+    from nexo_campus.rules.prestamos import DIAS_MAXIMOS_PRESTAMO, MAX_PRESTAMOS_ACTIVOS, TIPOS_NO_PRESTABLES
     from nexo_campus.services import prestamos as servicio
 
-    disponibles = {f"{r.id} · {r.nombre}": r.id for r in recursos if r.estado is EstadoRecurso.disponible}
+    disponibles = {
+        f"{r.id} · {r.nombre}": r.id
+        for r in recursos
+        if r.estado is EstadoRecurso.disponible and r.tipo not in TIPOS_NO_PRESTABLES
+    }
+    st.caption(
+        f"Reglas vigentes: máximo {MAX_PRESTAMOS_ACTIVOS} préstamos activos por persona · hasta {DIAS_MAXIMOS_PRESTAMO} días · "
+        f"no se prestan: {', '.join(ui.texto(t) for t in sorted(TIPOS_NO_PRESTABLES))} (se usan reservando su sala)."
+    )
+    if not disponibles:
+        st.info(
+            "No hay equipos prestables disponibles. Los PC de torre son fijos de su sala; registra portátiles, "
+            "proyectores u otros equipos en la pestaña Administrar.",
+            icon="💻",
+        )
     col_prestar, col_devolver = st.columns(2)
 
     with col_prestar, st.form("form_prestamo", clear_on_submit=True):

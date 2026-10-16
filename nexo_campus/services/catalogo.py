@@ -58,8 +58,8 @@ def actualizar_espacio(
     espacio.tipo = _tipo(tipo)
     espacio.aforo = aforo
     espacio.ubicacion = _opcional(ubicacion)
-    espacio.estado = estado
-    return repositorio.guardar_espacio(espacio)
+    repositorio.guardar_espacio(espacio)  # el estado se mantiene: el cambio va con historial
+    return repositorio.cambiar_estado_espacio(espacio_id, estado, "Cambio desde administración", OrigenCambioEstado.edicion)
 
 
 # --- Recursos ------------------------------------------------------------------------------------

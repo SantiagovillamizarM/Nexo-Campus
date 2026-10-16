@@ -6,6 +6,7 @@ from nexo_campus.ai.triaje import AREA_POR_CATEGORIA, AREAS, CATEGORIAS
 from nexo_campus.errors import IAError, NexoCampusError
 from nexo_campus.models import Espacio, EstadoIncidencia, Incidencia, OrigenClasificacion, Prioridad, Recurso
 from nexo_campus.repositories import catalogo
+from nexo_campus.rules.central import PRIORIDADES_QUE_BLOQUEAN, bloquea
 from nexo_campus.ui import componentes as ui
 from nexo_campus.ui.estilos import COLORES
 
@@ -154,11 +155,17 @@ def _revision(reporte: dict) -> None:
         st.session_state.pop(CLAVE_REVISION, None)
         return incidencia
 
-    ui.ejecutar(
-        _registrar,
-        lambda i: f"Incidencia #{i.id} registrada · {ui.etiqueta(i.origen_clasificacion.value)} · enviada a {ui.texto(i.area_responsable)}.",
-        recargar=True,
-    )
+    def _mensaje(incidencia: Incidencia) -> str:
+        from nexo_campus.services import regla_central
+
+        texto = (
+            f"Incidencia #{incidencia.id} registrada · {ui.etiqueta(incidencia.origen_clasificacion.value)} · "
+            f"enviada a {ui.texto(incidencia.area_responsable)}."
+        )
+        bloqueo = regla_central.describir_bloqueo(incidencia)
+        return f"{texto} ⛔ {bloqueo}." if bloqueo else texto
+
+    ui.ejecutar(_registrar, _mensaje, recargar=True)
 
 
 def _como_funciona() -> None:
@@ -170,6 +177,10 @@ def _como_funciona() -> None:
             ("3. Revisión", "Se acepta o se corrige"),
             ("4. Registro", "Queda marcado IA o manual"),
             ("Si la IA falla", "Clasificación manual"),
+            (
+                "Prioridad " + " o ".join(ui.etiqueta(p.value) for p in sorted(PRIORIDADES_QUE_BLOQUEAN, key=lambda p: p.value)),
+                "Inhabilita el espacio o equipo hasta cerrarse",
+            ),
         ],
     )
 
@@ -186,6 +197,8 @@ def _tarjeta(incidencia: Incidencia) -> str:
         incidencia.origen_clasificacion and ui.etiqueta(incidencia.origen_clasificacion.value),
         incidencia.fecha_reporte and f"Reportada: {incidencia.fecha_reporte:%d/%m/%Y %H:%M}",
     ]
+    if afectado and incidencia.estado is not EstadoIncidencia.cerrada and bloquea(incidencia.prioridad):
+        meta.insert(0, f"⛔ Mantiene inhabilitado: {afectado}")
     titulo = ui.texto(incidencia.categoria) if incidencia.categoria else "Sin categoría"
     return ui.tarjeta_item(titulo, badges, meta, incidencia.descripcion)
 
@@ -201,8 +214,14 @@ def _cerrar(abiertas: list[Incidencia]) -> None:
         format_func=lambda i: f"#{opciones[i].codigo_origen or i} · {ui.etiqueta(opciones[i].prioridad.value) if opciones[i].prioridad else '—'} · {opciones[i].descripcion[:70]}",
         disabled=not opciones, key="cerrar_incidencia",
     )
+    def _mensaje(incidencia: Incidencia) -> str:
+        from nexo_campus.services import regla_central
+
+        liberacion = regla_central.describir_liberacion(incidencia)
+        return f"Incidencia #{incidencia.id} cerrada. ✅ {liberacion}." if liberacion else f"Incidencia #{incidencia.id} cerrada."
+
     if col_boton.button("Cerrar incidencia", use_container_width=True, disabled=elegida is None):
-        ui.ejecutar(lambda: servicio.cerrar_incidencia(elegida), f"Incidencia #{elegida} cerrada.", recargar=True)
+        ui.ejecutar(lambda: servicio.cerrar_incidencia(elegida), _mensaje, recargar=True)
 
 
 def _tablero(incidencias: list[Incidencia], servicio_listo: bool) -> None:

@@ -24,6 +24,7 @@ from nexo_campus.models import (
 from nexo_campus.repositories import incidencias as repositorio_incidencias
 from nexo_campus.repositories import prestamos as repositorio_prestamos
 from nexo_campus.repositories import reservas as repositorio_reservas
+from nexo_campus.services import regla_central
 
 ORIGENES_PERMITIDOS = {OrigenClasificacion.ia, OrigenClasificacion.manual}
 
@@ -138,14 +139,18 @@ def registrar_incidencia(
         origen_clasificacion=origen,
         estado=EstadoIncidencia.abierta,
     )
-    return repositorio_incidencias.guardar_incidencia(incidencia)
+    guardada = repositorio_incidencias.guardar_incidencia(incidencia)
+    regla_central.bloquear_por_incidencia(guardada)  # si es grave, inhabilita el espacio o equipo
+    return guardada
 
 
 def cerrar_incidencia(incidencia_id: int) -> Incidencia:
-    """Cierra la incidencia. La rehabilitación del espacio o equipo bloqueado es la regla central de P2."""
+    """Cierra la incidencia y, por la regla central, libera el espacio o equipo que mantenía bloqueado."""
     incidencia = repositorio_incidencias.obtener_incidencia(incidencia_id)
     if incidencia is None:
         raise ReglaNegocioError(f"No existe la incidencia #{incidencia_id}.")
     if incidencia.estado is EstadoIncidencia.cerrada:
         raise ReglaNegocioError(f"La incidencia #{incidencia_id} ya está cerrada.")
-    return repositorio_incidencias.cerrar_incidencia(incidencia_id)
+    cerrada = repositorio_incidencias.cerrar_incidencia(incidencia_id)
+    regla_central.liberar_por_cierre(cerrada)
+    return cerrada

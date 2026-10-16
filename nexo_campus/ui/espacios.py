@@ -121,6 +121,7 @@ def _reglas_vigentes() -> None:
             ("Aforo", "No se puede superar"),
             ("Cruces de horario", "No permitidos"),
             ("Estados reservables", ", ".join(ui.etiqueta(e.value) for e in reglas.ESTADOS_RESERVABLES)),
+            ("Incidencia alta o crítica", "Inhabilita el espacio"),
         ],
     )
 
@@ -148,6 +149,22 @@ def _reservas_registradas(espacios: list[Espacio]) -> None:
         ui.ejecutar(lambda: servicio.cancelar_reserva(elegida), f"Reserva #{elegida} cancelada.", recargar=True)
 
     nombres = {e.id: e.nombre for e in espacios}
+    # Regla central: una reserva activa a futuro en un espacio inhabilitado hay que reubicarla.
+    inhabilitados = {e.id for e in espacios if e.estado is EstadoEspacio.inhabilitado}
+    ahora = datetime.now()
+
+    def aviso(r) -> str:
+        if r.estado is EstadoReserva.activa and r.fin > ahora and r.espacio_id in inhabilitados:
+            return "⛔ Reubicar: espacio inhabilitado"
+        return ""
+
+    por_reubicar = sum(bool(aviso(r)) for r in reservas)
+    if por_reubicar:
+        st.warning(
+            f"{por_reubicar} reserva(s) activa(s) están en espacios inhabilitados por una incidencia. "
+            "Cancélalas y créalas en otro espacio (al intentarlo, la IA recomienda alternativas).",
+            icon="⛔",
+        )
     ui.tabla(
         [
             {
@@ -158,6 +175,7 @@ def _reservas_registradas(espacios: list[Espacio]) -> None:
                 "Horario": f"{r.inicio:%H:%M} – {r.fin:%H:%M}",
                 "Asistentes": r.asistentes,
                 "Estado": ui.etiqueta(r.estado.value),
+                "Aviso": aviso(r),
             }
             for r in sorted(reservas, key=lambda r: r.inicio)
         ],

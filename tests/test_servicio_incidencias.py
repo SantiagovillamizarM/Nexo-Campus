@@ -71,12 +71,29 @@ PROPUESTA = Triaje(
 )
 
 
+class ReglaCentralFalsa:
+    """Registra las llamadas a la regla central (P2), que tiene sus propias pruebas con base de datos."""
+
+    def __init__(self):
+        self.bloqueadas: list[int] = []
+        self.liberadas: list[int] = []
+
+    def bloquear_por_incidencia(self, incidencia):
+        self.bloqueadas.append(incidencia.id)
+
+    def liberar_por_cierre(self, incidencia):
+        self.liberadas.append(incidencia.id)
+        return []
+
+
 @pytest.fixture
 def repo(monkeypatch):
     repositorio = RepositorioEnMemoria()
+    repositorio.regla_central = ReglaCentralFalsa()
     monkeypatch.setattr(servicio, "repositorio_reservas", repositorio)
     monkeypatch.setattr(servicio, "repositorio_prestamos", repositorio)
     monkeypatch.setattr(servicio, "repositorio_incidencias", repositorio)
+    monkeypatch.setattr(servicio, "regla_central", repositorio.regla_central)
     return repositorio
 
 
@@ -216,3 +233,14 @@ def test_no_se_cierra_dos_veces_ni_una_que_no_existe(repo):
         servicio.cerrar_incidencia(1)
     with pytest.raises(ReglaNegocioError, match="No existe"):
         servicio.cerrar_incidencia(99)
+
+
+def test_registrar_y_cerrar_aplican_la_regla_central(repo):
+    incidencia = servicio.registrar_incidencia(
+        "Sale humo del proyector", "Ana", "AU-201", "PRY-02",
+        "seguridad", Prioridad.critica, "seguridad", None, OrigenClasificacion.manual,
+    )
+    assert repo.regla_central.bloqueadas == [incidencia.id]
+
+    servicio.cerrar_incidencia(incidencia.id)
+    assert repo.regla_central.liberadas == [incidencia.id]
